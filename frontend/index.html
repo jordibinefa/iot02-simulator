@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32 Simulator — IoT-02</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- =====================================================================
+     Estructura principal — Layout dual
+     Columna esquerra: foto placa IoT-02 amb components interactius
+     Columna dreta: compilació + Serial Monitor
+     ===================================================================== -->
+<div id="app">
+
+    <!-- Barra d'eines -->
+    <div id="toolbar">
+        <span class="app-title">ESP32 Simulator — IoT-02</span>
+        <div class="toolbar-separator"></div>
+        <div class="toolbar-status">
+            <span class="status-dot disconnected" id="conn-indicator"></span>
+            <span id="conn-text">Desconnectat</span>
+        </div>
+        <div class="toolbar-separator"></div>
+        <div class="toolbar-status">
+            <span>MAC:</span>
+            <input class="toolbar-mac" id="mac-display" type="text" value="—"
+                   title="MAC editable (12 hex chars)">
+        </div>
+        <div class="toolbar-separator"></div>
+        <div class="toolbar-status">
+            <span>ID:</span>
+            <code class="toolbar-session-id" id="session-id-display" title="Session ID (MQTT)">—</code>
+            <button class="toolbar-copy-btn" id="btn-copy-session" title="Copia Session ID">⎘</button>
+        </div>
+        <div class="toolbar-separator"></div>
+        <div class="toolbar-status">
+            <span class="status-label">Sessions:</span>
+            <span id="capacity-display">—</span>
+        </div>
+        <div class="toolbar-spacer"></div>
+        <span class="toolbar-status" style="font-size:11px; color:#565f89;">
+            Core: <code>esp32@0.3.1</code>
+        </span>
+        <button id="btn-settings" title="Configuració">⚙</button>
+    </div>
+
+    <!-- Àrea principal: placa + panell -->
+    <div id="main-area">
+
+        <!-- Columna esquerra: foto de la placa -->
+        <div id="board-container">
+            <img id="board-image"
+                 src="imatges/IoT-02.png"
+                 alt="Placa IoT-02">
+            <!-- Els components interactius (LEDs, botons, BME280, LDR, OLED)
+                 s'injecten aquí via createBoardComponents() -->
+        </div>
+
+        <!-- Columna dreta: panell de control -->
+        <div id="control-panel">
+
+            <!-- Secció compilació + accions -->
+            <div id="compile-section">
+                <h2>📦 Compilació</h2>
+                <div class="upload-zone" id="upload-zone">
+                    <span class="icon">📁</span>
+                    <p>Arrossega aquí el <strong>ZIP del projecte</strong>,
+                       un <strong>ZIP amb binaris</strong> o un <strong>.bin merged</strong></p>
+                    <p style="font-size:11px; color:var(--fg-muted); margin-top:4px;">
+                       ZIP binaris: *.ino.bin + bootloader + partitions · BIN merged: 4MB flash image
+                    </p>
+                    <input type="file" id="file-input" accept=".zip,.bin">
+                </div>
+                <div id="compile-status"></div>
+                <div class="actions-row">
+                    <button class="btn" id="btn-compile" disabled>Compila / Carrega</button>
+                    <button class="btn btn-green" id="btn-start" disabled>▶ Inicia QEMU</button>
+                    <button class="btn btn-red" id="btn-stop" disabled>⬛ Atura</button>
+                    <a class="btn btn-small" id="btn-download"
+                       style="display:none; text-decoration:none;">⬇ .bin</a>
+                </div>
+            </div>
+
+            <!-- Secció Serial Monitor -->
+            <div id="serial-section">
+                <h2>🖥️ Serial Monitor (115200 baud)</h2>
+                <div id="serial-output"></div>
+                <div class="serial-input-row">
+                    <input type="text" id="serial-input" placeholder="Tramet al Serial...">
+                    <button class="btn btn-small" id="btn-serial-send">Tramet</button>
+                    <button class="btn btn-small" id="btn-serial-clear"
+                            style="background:var(--border); color:var(--fg);">Neteja</button>
+                </div>
+            </div>
+
+        </div><!-- fi #control-panel -->
+
+    </div><!-- fi #main-area -->
+
+</div><!-- fi #app -->
+
+
+<!-- =====================================================================
+     JavaScript — Mòduls externs
+     ===================================================================== -->
+<script src="js/SettingsManager.js"></script>
+<script src="js/SimulatorTransport.js"></script>
+<script src="js/ConfigPage.js"></script>
+<script src="js/components/InteractiveButton.js"></script>
+<script src="js/components/InteractiveLed.js"></script>
+<script src="js/components/InteractiveBme280.js"></script>
+<script src="js/components/InteractiveLdr.js"></script>
+<script src="js/components/InteractiveOled.js"></script>
+
+<!-- =====================================================================
+     JavaScript — Lògica del simulador
+     ===================================================================== -->
+<script>
+// ─── State ───
+let ws           = null;
+let sessionId    = localStorage.getItem('esp32sim_sessionId') || crypto.randomUUID();
+let elfHash      = null;
+let mac          = localStorage.getItem('esp32sim_mac') || null;
+let selectedFile = null;
+
+localStorage.setItem('esp32sim_sessionId', sessionId);
+
+// ─── Instàncies globals ───
+const settingsManager    = new SettingsManager();
+const simulatorTransport = new SimulatorTransport();
+
+// ─── Components de la placa (es creen a onBoardImageLoaded) ───
+let boardComponents = [];
+
+// ─── DOM refs ───
+const $ = id => document.getElementById(id);
+const serialOutput    = $('serial-output');
+const compileStatus   = $('compile-status');
+const connIndicator   = $('conn-indicator');
+const connText        = $('conn-text');
+const macDisplay      = $('mac-display');
+const capacityDisplay = $('capacity-display');
+const sessionIdDisplay = $('session-id-display');
+const btnCopySession   = $('btn-copy-session');
+
+// ─── ConfigPage ───
+const configPage = new ConfigPage($('app'), {
+    settingsManager,
+    onSaved: () => {
+        // Sincronitza la MAC mostrada a la toolbar
+        macDisplay.value = settingsManager.mqttMac;
+        mac = settingsManager.mqttMac;
+        localStorage.setItem('esp32sim_mac', mac);
+    },
+});
+
+$('btn-settings').addEventListener('click', () => configPage.show());
+
+// ─── File upload ───
+const uploadZone = $('upload-zone');
+const fileInput  = $('file-input');
+
+uploadZone.addEventListener('click', () => fileInput.click());
+
+uploadZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    uploadZone.classList.add('dragover');
+});
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+uploadZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    uploadZone.classList.remove('dragover');
+    if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', (e) => {
+    if (e.target.files[0]) handleFile(e.target.files[0]);
+});
+
+function handleFile(file) {
+    selectedFile = file;
+    const isBin = file.name.toLowerCase().endsWith('.bin');
+    const icon = uploadZone.querySelector('.icon');
+    const p    = uploadZone.querySelector('p');
+    if (icon) icon.textContent = '✅';
+    if (p) p.innerHTML = `${file.name} (${(file.size / 1024).toFixed(1)} KB)${isBin ? ' — BIN' : ''}`;
+    $('btn-compile').disabled = false;
+    $('btn-compile').textContent = 'Compila / Carrega';
+    compileStatus.textContent = '';
+}
+
+// ─── Helper: mostrar estat de compilació (amb spinner opcional) ───
+function setCompileStatus(text, color, showSpinner = false) {
+    compileStatus.innerHTML = showSpinner
+        ? `<span class="spinner"></span> ${text}`
+        : text;
+    compileStatus.style.color = color || 'var(--fg-muted)';
+}
+
+// =====================================================================
+// ─── initFromHash() — Fase 3 (#open:) i Fase 4 (#run:) ──────────────
+// =====================================================================
+// Sintaxi del hash:
+//   #open:bin=https://...          → carrega binari (sense auto-start)
+//   #open:code=https://...         → carrega ZIP font (sense auto-start)
+//   #open:mac=XXXXXXXXXXXX         → estableix MAC sense carregar res
+//   #open:mac=XXXX&bin=https://... → combinació MAC + binari
+//   #open:sid=NOM&bin=https://...  → Session ID + binari
+//   #run:bin=https://...           → carrega binari + auto-start QEMU
+//   #run:code=https://...          → carrega ZIP font + auto-start QEMU
+//   #run:sid=NOM&bin=https://...   → Session ID + binari + auto-start
+//
+// Prioritats:
+//   - bin= té prioritat sobre code= si tots dos presents
+//   - URL sid= > localStorage > UUID nou
+//   - URL mac= > localStorage > aleatòria nova
+//   - El hash es neteja de la URL just després de parsejar-lo
+// =====================================================================
+
+async function initFromHash() {
+    const hash = location.hash;
+    if (!hash || hash.length < 2) return;
+
+    // Detecta el prefix (#open: o #run:)
+    const openMatch = hash.match(/^#(open|run):(.+)$/i);
+    if (!openMatch) return; // Format desconegut → comportament normal
+
+    const mode      = openMatch[1].toLowerCase(); // 'open' o 'run'
+    const paramsRaw = openMatch[2];
+
+    // Neteja el hash de la URL immediatament (evita re-processar en refresc)
+    history.replaceState(null, '', location.pathname);
+
+    // Parseja els paràmetres com a query string
+    let params;
+    try {
+        params = new URLSearchParams(paramsRaw);
+    } catch {
+        setCompileStatus('❌ Hash mal format', 'var(--red)');
+        return;
+    }
+
+    // ── Pas 0: sid= (si present, sobreescriu sessionId) ──
+    const sidParam = params.get('sid');
+    if (sidParam) {
+        const sidClean = sidParam.trim();
+        // Rebutja valors buits o amb caràcters prohibits en topics MQTT (/, +, #)
+        if (sidClean.length > 0 && !/[\/+#]/.test(sidClean)) {
+            sessionId = sidClean;
+            localStorage.setItem('esp32sim_sessionId', sessionId);
+            // Actualitza el display de la toolbar
+            if (sessionIdDisplay) {
+                const short = sessionId.length > 8 ? sessionId.substring(0, 8) + '…' : sessionId;
+                sessionIdDisplay.textContent = short;
+                sessionIdDisplay.title = `Session ID complet: ${sessionId}\n(tòpic MQTT: iot02/${sessionId}/...)`;
+            }
+        } else {
+            setCompileStatus('⚠️ sid= invàlid (no pot contenir /, + ni #), s\'usa el guardat', 'var(--yellow)');
+        }
+    }
+
+    // ── Pas 1: MAC (si present a la URL, sobreescriu localStorage) ──
+    const macParam = params.get('mac');
+    if (macParam) {
+        const macClean = macParam.trim().toUpperCase().replace(/:/g, '');
+        if (/^[0-9A-F]{12}$/.test(macClean)) {
+            mac = macClean;
+            localStorage.setItem('esp32sim_mac', mac);
+            macDisplay.value = mac;
+            settingsManager.mqttMac = mac;
+        } else {
+            setCompileStatus('⚠️ MAC de la URL invàlida, s\'usa la guardada', 'var(--yellow)');
+        }
+    }
+
+    // ── Pas 2: Determina la font del binari (bin= prioritari sobre code=) ──
+    const binUrl  = params.get('bin');
+    const codeUrl = params.get('code');
+
+    if (!binUrl && !codeUrl) {
+        // Només s'ha especificat mac= → res més a fer
+        return;
+    }
+
+    const autoStart = (mode === 'run');
+
+    if (binUrl) {
+        await _hashLoadBin(binUrl, autoStart);
+    } else {
+        await _hashLoadCode(codeUrl, autoStart);
+    }
+}
+
+/**
+ * Descarrega un binari (.bin o .zip amb bins) des d'una URL
+ * i el puja a /upload-bin. Si autoStart, inicia QEMU automàticament.
+ */
+async function _hashLoadBin(url, autoStart) {
+    setCompileStatus('Carregant binari des de URL...', 'var(--yellow)', true);
+
+    let blob;
+    try {
+        blob = await _proxyFetch(url);
+    } catch (err) {
+        setCompileStatus(`❌ Error al fetch: ${err.message}`, 'var(--red)');
+        return;
+    }
+
+    // Endevina el nom de fitxer des de la URL
+    const urlPath  = url.split('?')[0];
+    const fileName = urlPath.split('/').pop() || 'firmware.bin';
+    const file     = new File([blob], fileName, { type: 'application/octet-stream' });
+
+    // Actualitza la zona d'upload visualment (icona de link, no checkmark)
+    _updateUploadZoneUI(file);
+
+    // Puja a /upload-bin
+    setCompileStatus('Pujant binari...', 'var(--yellow)', true);
+
+    const formData = new FormData();
+    formData.append('firmware', file);
+
+    let data;
+    try {
+        const resp = await fetch('/upload-bin', {
+            method: 'POST',
+            headers: { 'X-Session-Id': sessionId },
+            body: formData,
+        });
+        data = await resp.json();
+    } catch (err) {
+        setCompileStatus(`❌ Error al pujar: ${err.message}`, 'var(--red)');
+        return;
+    }
+
+    if (!data.success) {
+        setCompileStatus(`❌ ${data.message}`, 'var(--red)');
+        return;
+    }
+
+    elfHash = data.elfHash;
+    setCompileStatus('✅ Binari llest', 'var(--green)');
+    $('btn-start').disabled = false;
+    $('btn-download').style.display = 'inline-block';
+    $('btn-download').href = `/firmware/${elfHash}/download`;
+
+    if (autoStart) {
+        // Petit retard perquè l'usuari vegi el missatge "Binari llest"
+        await _sleep(400);
+        $('btn-start').click();
+    }
+}
+
+/**
+ * Descarrega un ZIP de codi font des d'una URL i el puja a /compile.
+ * Si autoStart, inicia QEMU quan la compilació acabi amb èxit.
+ */
+async function _hashLoadCode(url, autoStart) {
+    setCompileStatus('Carregant codi font des de URL...', 'var(--yellow)', true);
+
+    let blob;
+    try {
+        blob = await _proxyFetch(url);
+    } catch (err) {
+        setCompileStatus(`❌ Error al fetch: ${err.message}`, 'var(--red)');
+        return;
+    }
+
+    const urlPath  = url.split('?')[0];
+    const fileName = urlPath.split('/').pop() || 'project.zip';
+    const file     = new File([blob], fileName, { type: 'application/zip' });
+
+    _updateUploadZoneUI(file);
+
+    setCompileStatus('Compilant...', 'var(--yellow)', true);
+
+    const formData = new FormData();
+    formData.append('project', file);
+
+    let data;
+    try {
+        const resp = await fetch('/compile', {
+            method: 'POST',
+            headers: { 'X-Session-Id': sessionId },
+            body: formData,
+        });
+        data = await resp.json();
+    } catch (err) {
+        setCompileStatus(`❌ Error a la compilació: ${err.message}`, 'var(--red)');
+        return;
+    }
+
+    if (!data.success) {
+        setCompileStatus(`❌ ${data.message}`, 'var(--red)');
+        return;
+    }
+
+    elfHash = data.elfHash;
+    setCompileStatus(
+        data.cached ? '✅ Binari trobat al caché!' : '✅ Compilació correcta',
+        'var(--green)'
+    );
+    $('btn-start').disabled = false;
+    $('btn-download').style.display = 'inline-block';
+    $('btn-download').href = `/firmware/${elfHash}/download`;
+
+    if (autoStart) {
+        await _sleep(400);
+        $('btn-start').click();
+    }
+}
+
+/**
+ * Fetch d'una URL externa a través del proxy local per evitar CORS.
+ * Retorna un Blob. Llença Error si el proxy respon amb error.
+ */
+async function _proxyFetch(url) {
+    const proxyUrl = `/proxy?url=${encodeURIComponent(url)}`;
+    const resp = await fetch(proxyUrl, { signal: AbortSignal.timeout(30_000) });
+    if (!resp.ok) {
+        // Intenta llegir el missatge d'error del proxy
+        let msg = `HTTP ${resp.status}`;
+        try {
+            const errData = await resp.json();
+            if (errData.error) msg = errData.error;
+        } catch { /* ignora */ }
+        throw new Error(msg);
+    }
+    return resp.blob();
+}
+
+/**
+ * Actualitza la zona d'upload visualment sense canviar selectedFile.
+ * Usa la icona 🔗 per indicar que ve d'una URL, no d'una selecció manual.
+ */
+function _updateUploadZoneUI(file) {
+    const isBin = file.name.toLowerCase().endsWith('.bin');
+    const icon  = uploadZone.querySelector('.icon');
+    const p     = uploadZone.querySelector('p');
+    if (icon) icon.textContent = '🔗';
+    if (p) p.innerHTML = `${file.name} (${(file.size / 1024).toFixed(1)} KB)${isBin ? ' — BIN' : ''}`;
+}
+
+/** Retorna una Promise que es resol després de `ms` mil·lisegons */
+function _sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// ─── Compile / Carregar ───
+$('btn-compile').addEventListener('click', async () => {
+    if (!selectedFile) return;
+    $('btn-compile').disabled = true;
+    setCompileStatus('Processant...', 'var(--yellow)', true);
+
+    const formData = new FormData();
+    const isBin = selectedFile.name.toLowerCase().endsWith('.bin');
+    formData.append(isBin ? 'firmware' : 'project', selectedFile);
+
+    try {
+        const endpoint = isBin ? '/upload-bin' : '/compile';
+        const resp = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'X-Session-Id': sessionId },
+            body: formData,
+        });
+        const data = await resp.json();
+
+        if (data.success) {
+            elfHash = data.elfHash;
+            setCompileStatus(
+                data.cached ? '✅ Binari trobat al caché!' : `✅ ${data.message}`,
+                'var(--green)'
+            );
+            $('btn-start').disabled = false;
+            $('btn-download').style.display = 'inline-block';
+            $('btn-download').href = `/firmware/${elfHash}/download`;
+        } else {
+            setCompileStatus(`❌ ${data.message}`, 'var(--red)');
+        }
+    } catch (err) {
+        setCompileStatus(`❌ Error: ${err.message}`, 'var(--red)');
+    }
+    $('btn-compile').disabled = false;
+});
+
+// ─── Start QEMU ───
+$('btn-start').addEventListener('click', async () => {
+    if (!elfHash) return;
+    $('btn-start').disabled = true;
+    setCompileStatus('Iniciant QEMU...', 'var(--yellow)', true);
+
+    try {
+        const resp = await fetch(`/session/${sessionId}/start`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ elfHash, mac: macDisplay.value.trim() || undefined }),
+        });
+        const data = await resp.json();
+
+        if (data.success) {
+            mac = data.mac;
+            localStorage.setItem('esp32sim_mac', mac);
+            macDisplay.value = mac;
+            setCompileStatus('✅ QEMU iniciat!', 'var(--green)');
+            $('btn-stop').disabled = false;
+            connectWebSocket();
+        } else {
+            setCompileStatus(`❌ ${data.message}`, 'var(--red)');
+            $('btn-start').disabled = false;
+        }
+    } catch (err) {
+        setCompileStatus(`❌ Error: ${err.message}`, 'var(--red)');
+        $('btn-start').disabled = false;
+    }
+});
+
+// ─── Stop QEMU ───
+$('btn-stop').addEventListener('click', async () => {
+    try {
+        await fetch(`/session/${sessionId}`, { method: 'DELETE' });
+    } catch (_) { /* ignora */ }
+    if (ws) ws.close();
+    simulatorTransport.detachWebSocket();
+    $('btn-stop').disabled = true;
+    $('btn-start').disabled = false;
+    setConnectionStatus('disconnected', 'Desconnectat');
+});
+
+// ─── WebSocket ───
+function connectWebSocket() {
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    ws = new WebSocket(`${proto}//${location.host}/session/${sessionId}/ws`);
+
+    setConnectionStatus('connecting', 'Connectant...');
+
+    ws.onopen = () => {
+        setConnectionStatus('connected', 'Connectat');
+        simulatorTransport.attachWebSocket(ws);
+        // Keepalive cada 60s
+        setInterval(() => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'keepalive' }));
+            }
+        }, 60_000);
+    };
+
+    ws.onmessage = (event) => {
+        const msg = JSON.parse(event.data);
+        handleWsMessage(msg);
+    };
+
+    ws.onclose = () => {
+        setConnectionStatus('disconnected', 'Desconnectat');
+        simulatorTransport.detachWebSocket();
+    };
+
+    ws.onerror = () => {
+        setConnectionStatus('disconnected', 'Error de connexió');
+    };
+}
+
+function handleWsMessage(msg) {
+    switch (msg.type) {
+        case 'serial':
+            appendSerial(msg.data);
+            break;
+        case 'gpio':
+            simulatorTransport.handleGpioMessage(msg.pin, msg.value);
+            break;
+        case 'oled':
+            simulatorTransport.handleOledMessage(msg.framebuffer);
+            break;
+        case 'session':
+            if (!mac) {
+                mac = msg.mac;
+                macDisplay.value = mac;
+                localStorage.setItem('esp32sim_mac', mac);
+            }
+            break;
+        case 'capacity':
+            capacityDisplay.textContent = msg.used + '/' + msg.max;
+            break;
+        case 'timeout_warning':
+            appendSerial('\n⚠️ Sessió inactiva! Tens ' + msg.seconds + 's per respondre.\n');
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'keepalive' }));
+            }
+            break;
+        case 'session_end':
+            appendSerial('\n🛑 Sessió acabada: ' + (msg.reason || 'desconegut') + '\n');
+            setConnectionStatus('disconnected', 'Sessió acabada');
+            simulatorTransport.detachWebSocket();
+            $('btn-stop').disabled = true;
+            $('btn-start').disabled = false;
+            break;
+        case 'monitor_ready':
+            // Delay 1500ms per donar temps a QEMU d'inicialitzar els perifèrics
+            setTimeout(() => simulatorTransport.sendCurrentSensorValues(), 1500);
+            break;
+        case 'button_state': {
+            // Actualitzar visualment el botó corresponent al pin
+            const pinMap = { 0: 'btIO0', 34: 'btI34', 35: 'btI35' };
+            const mqttName = pinMap[msg.pin];
+            if (mqttName) {
+                const btn = boardComponents.find(c => c instanceof InteractiveButton && c._mqttName === mqttName);
+                if (btn) btn.setPressed(msg.value === 1);
+            }
+            break;
+        }
+        case 'ldr_state': {
+            const ldr = boardComponents.find(c => c instanceof InteractiveLdr);
+            if (ldr) ldr.setExternalValue(msg.value);
+            break;
+        }
+        case 'bme_state': {
+            const bme = boardComponents.find(c => c instanceof InteractiveBme280);
+            if (bme) bme.setExternalValues({ temp: msg.temp, rh: msg.rh, pressure: msg.pressure });
+            break;
+        }
+        case 'status':
+            appendSerial('[INFO] ' + msg.message + '\n');
+            break;
+    }
+}
+
+// ─── Serial Monitor ───
+function appendSerial(text) {
+    serialOutput.textContent += text;
+    serialOutput.scrollTop = serialOutput.scrollHeight;
+    // Limitar a 50KB per evitar consum de memòria
+    if (serialOutput.textContent.length > 50000) {
+        serialOutput.textContent = serialOutput.textContent.slice(-30000);
+    }
+}
+
+$('btn-serial-clear').addEventListener('click', () => { serialOutput.textContent = ''; });
+
+$('btn-serial-send').addEventListener('click', () => {
+    const input = $('serial-input');
+    if (input.value && ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'serial_input', data: input.value + '\n' }));
+        input.value = '';
+    }
+});
+
+$('serial-input').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') $('btn-serial-send').click();
+});
+
+// ─── Helpers ───
+function setConnectionStatus(cssClass, text) {
+    connIndicator.className = `status-dot ${cssClass}`;
+    connText.textContent    = text;
+}
+
+// ─── Init MAC ───
+if (!mac) {
+    const b = Array.from(crypto.getRandomValues(new Uint8Array(6)));
+    b[0] = (b[0] & 0xfe) | 0x02; // Unicast + locally administered
+    mac = b.map(x => x.toString(16).toUpperCase().padStart(2, '0')).join('');
+    localStorage.setItem('esp32sim_mac', mac);
+}
+macDisplay.value = mac;
+settingsManager.mqttMac = mac;
+
+// ─── Init Session ID display ───
+if (sessionIdDisplay) {
+    // Mostrar només els primers 8 caràcters per estalviar espai a la toolbar
+    sessionIdDisplay.textContent = sessionId.substring(0, 8) + '…';
+    sessionIdDisplay.title = `Session ID complet: ${sessionId}\n(tòpic MQTT: iot02/${sessionId}/...)`;
+}
+if (btnCopySession) {
+    btnCopySession.addEventListener('click', () => {
+        navigator.clipboard.writeText(sessionId).then(() => {
+            btnCopySession.textContent = '✓';
+            setTimeout(() => { btnCopySession.textContent = '⎘'; }, 1500);
+        }).catch(() => {
+            // Fallback per a contextos sense clipboard API
+            prompt('Session ID (copia manualment):', sessionId);
+        });
+    });
+}
+
+// Sincronitza l'edició manual de la MAC a la toolbar
+macDisplay.addEventListener('change', () => {
+    const v = macDisplay.value.trim().toUpperCase().replace(/:/g, '');
+    if (/^[0-9A-F]{12}$/.test(v)) {
+        mac = v;
+        localStorage.setItem('esp32sim_mac', mac);
+        settingsManager.mqttMac = mac;
+    } else {
+        macDisplay.value = mac; // Reverteix si el format és invàlid
+    }
+});
+
+// ─── Components interactius sobre la placa ───
+
+// GPIO label per mostrar als LEDs (via data-gpio-label)
+const LED_GPIO_LABELS = {
+    ledW: 'GPIO 19',
+    ledR: 'GPIO 23',
+    ledY: 'GPIO 27',
+    ledG: 'GPIO 32',
+};
+
+// Coordenades en píxels natius de IoT-02.png
+const BOARD_COMPONENTS_DEFS = [
+    // Botons
+    { cls: InteractiveButton, opts: { boardX: 282, boardY: 870,  boardWidth: 44,  boardHeight: 44,  mqttName: 'btIO0' } },
+    { cls: InteractiveButton, opts: { boardX: 285, boardY: 965,  boardWidth: 44,  boardHeight: 44,  mqttName: 'btI34' } },
+    { cls: InteractiveButton, opts: { boardX: 285, boardY: 1060, boardWidth: 44,  boardHeight: 44,  mqttName: 'btI35' } },
+    // LEDs (amb etiqueta GPIO)
+    { cls: InteractiveLed, opts: { boardX: 670, boardY: 840,  boardWidth: 30, boardHeight: 50, color: 'white',  mqttName: 'ledW', gpioLabel: LED_GPIO_LABELS.ledW } },
+    { cls: InteractiveLed, opts: { boardX: 670, boardY: 912,  boardWidth: 30, boardHeight: 50, color: 'red',    mqttName: 'ledR', gpioLabel: LED_GPIO_LABELS.ledR } },
+    { cls: InteractiveLed, opts: { boardX: 670, boardY: 984,  boardWidth: 30, boardHeight: 50, color: 'yellow', mqttName: 'ledY', gpioLabel: LED_GPIO_LABELS.ledY } },
+    { cls: InteractiveLed, opts: { boardX: 670, boardY: 1056, boardWidth: 30, boardHeight: 50, color: 'lime',   mqttName: 'ledG', gpioLabel: LED_GPIO_LABELS.ledG } },
+    // Sensors
+    { cls: InteractiveLdr,    opts: { boardX: 337, boardY: 1105, boardWidth: 70,  boardHeight: 70  } },
+    { cls: InteractiveBme280, opts: { boardX: 385, boardY: 300,  boardWidth: 150, boardHeight: 150 } },
+    // OLED
+    { cls: InteractiveOled,   opts: { boardX: 354, boardY: 540,  boardWidth: 346, boardHeight: 173 } },
+];
+
+const boardImage     = $('board-image');
+const boardContainer = $('board-container');
+let IMG_NATIVE_W = 0;
+let IMG_NATIVE_H = 0;
+
+/**
+ * Crea tots els components interactius sobre la foto de la placa.
+ * Es crida un cop la imatge s'ha carregat.
+ */
+function createBoardComponents() {
+    boardComponents.forEach(c => c.destroy());
+    boardComponents = [];
+
+    BOARD_COMPONENTS_DEFS.forEach(def => {
+        const opts = { ...def.opts, mqttController: simulatorTransport };
+        if (def.cls === InteractiveBme280 || def.cls === InteractiveLdr) {
+            opts.settingsManager = settingsManager;
+        }
+        const comp = new def.cls(boardContainer, opts);
+        boardComponents.push(comp);
+    });
+
+    recalculatePositions();
+}
+
+/**
+ * Recalcula la posició de tots els components en funció de la mida
+ * actual del contenidor i la imatge.
+ */
+function recalculatePositions() {
+    if (!IMG_NATIVE_W || !IMG_NATIVE_H) return;
+
+    const containerW = boardContainer.clientWidth;
+    const containerH = boardContainer.clientHeight;
+
+    const imageScale = Math.min(containerW / IMG_NATIVE_W, containerH / IMG_NATIVE_H);
+    const renderedW  = IMG_NATIVE_W * imageScale;
+    const renderedH  = IMG_NATIVE_H * imageScale;
+    const xOffset    = (containerW - renderedW) / 2;
+    const yOffset    = (containerH - renderedH) / 2;
+
+    boardComponents.forEach(c => c.updatePosition(imageScale, xOffset, yOffset));
+}
+
+function onBoardImageLoaded() {
+    IMG_NATIVE_W = boardImage.naturalWidth;
+    IMG_NATIVE_H = boardImage.naturalHeight;
+    createBoardComponents();
+}
+
+if (boardImage.complete && boardImage.naturalWidth > 0) {
+    onBoardImageLoaded();
+} else {
+    boardImage.addEventListener('load', onBoardImageLoaded);
+    boardImage.addEventListener('error', () => {
+        compileStatus.textContent = '⚠️ No s\'ha pogut carregar la imatge de la placa';
+    });
+}
+
+window.addEventListener('resize', recalculatePositions);
+
+// ─── Crida inicial: processa el hash si n'hi ha ───
+initFromHash();
+</script>
+</body>
+</html>

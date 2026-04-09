@@ -1,0 +1,63 @@
+
+# Directoris de build i runtime de QEMU
+calib/build/
+calib/.git/
+
+# Logs
+*.log
+build.log
+build2.log
+
+# Fitxers de backup locals
+*.bak
+*.esp32sim
+*_preExtern.*
+*_preImm.*
+*_preURL.*
+*_preOled.*
+*_preSid.*
+*_preXatC.*
+backend/server_XPi.js
+backend/QemuManager_preExtern.js
+backend/QemuManager_preImm.js
+backend/MqttBridge_preImm.js
+backend/server_preExtern.js
+backend/server_preImm.js
+backend/server_preURL.js
+backend/package_preExtern.json
+backend/package_preImm.json
+frontend/index_esp32sim.html
+frontend/index_preExtern.html
+frontend/index_preImm.html
+frontend/index_preOled.html
+frontend/index_preSid.html
+frontend/index_preURL.html
+frontend/index_preXatC.html
+frontend/css/style_preExtern.css
+frontend/css/style_preImm.css
+frontend/css/style_preXatC.css
+frontend/js/SimulatorTransport_preOled.js
+frontend/js/components/InteractiveBme280_preImm.js
+frontend/js/components/InteractiveButton_preImm.js
+frontend/js/components/InteractiveLdr_preImm.js
+Dockerfile_noMqtt
+Dockerfile.bak
+Dockerfile.espressif.bak
+docker-compose.yml.bak
+docker-compose.yml.esp32sim
+docker-compose_*.yml
+examine-calib.sh
+patch-*.sh
+tree*.txt
+find.txt
+IoT-02_mqtt_json_upcSchool_broker2.zip
+prototype/
+
+# Node.js
+node_modules/
+
+# Directoris de runtime (Docker volumes)
+sessions/
+compilations/
+cache/
+firmware/

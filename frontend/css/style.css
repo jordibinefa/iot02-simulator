@@ -1,0 +1,807 @@
+/* ==========================================================================
+   style.css — ESP32 Simulator IoT-02 (Fase 5, Xat C)
+   Layout dual: foto placa (esquerra) + panell control (dreta)
+   Responsive: una columna en mòbil/tablet (< 768px)
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Reset i base
+   -------------------------------------------------------------------------- */
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+:root {
+    --bg:         #1a1b26;
+    --bg-deep:    #12122a;
+    --surface:    #24283b;
+    --border:     #3b4261;
+    --fg:         #c0caf5;
+    --fg-muted:   #565f89;
+    --accent:     #7aa2f7;
+    --green:      #9ece6a;
+    --red:        #f7768e;
+    --yellow:     #e0af68;
+    --cyan:       #00FFFF;
+    --toolbar-bg: #16213e;
+    --toolbar-fg: #90caf9;
+    --panel-bg:   #0f3460;
+}
+
+html, body {
+    height: 100%;
+    overflow: hidden;
+    font-family: 'Segoe UI', 'JetBrains Mono', Arial, sans-serif;
+    font-size: 14px;
+    color: var(--fg);
+    background: var(--bg);
+}
+
+/* --------------------------------------------------------------------------
+   Estructura principal (#app)
+   -------------------------------------------------------------------------- */
+#app {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    width: 100vw;
+}
+
+/* --------------------------------------------------------------------------
+   Barra d'eines (ToolBar)
+   -------------------------------------------------------------------------- */
+#toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--toolbar-bg);
+    color: #fff;
+    padding: 0 16px;
+    height: 44px;
+    flex-shrink: 0;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+    z-index: 10;
+}
+
+.app-title {
+    font-size: 16px;
+    font-weight: bold;
+    letter-spacing: 0.5px;
+    color: var(--toolbar-fg);
+    white-space: nowrap;
+}
+
+.toolbar-separator {
+    width: 1px;
+    height: 24px;
+    background: rgba(255,255,255,0.15);
+    flex-shrink: 0;
+}
+
+/* Barra d'estat dins la toolbar */
+.toolbar-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
+    color: #90a4ae;
+    flex-shrink: 0;
+}
+
+/* Punt indicador de connexió */
+.status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+    transition: background 0.4s, box-shadow 0.4s;
+    flex-shrink: 0;
+}
+
+.status-dot.disconnected {
+    background: var(--red);
+    box-shadow: 0 0 0 transparent;
+}
+
+.status-dot.connecting {
+    background: var(--accent);
+    /* Pulsació animada mentre connecta */
+    animation: pulse-connecting 1s ease-in-out infinite;
+}
+
+.status-dot.connected {
+    background: var(--green);
+    box-shadow: 0 0 6px var(--green);
+}
+
+@keyframes pulse-connecting {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.3; }
+}
+
+.toolbar-mac {
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 12px;
+    color: var(--yellow);
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--yellow);
+    width: 17ch;
+    outline: none;
+    padding: 1px 0;
+}
+
+/* Session ID abreujat a la toolbar */
+.toolbar-session-id {
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 11px;
+    color: #90caf9;
+    background: rgba(255,255,255,0.06);
+    border-radius: 3px;
+    padding: 1px 4px;
+    cursor: default;
+    user-select: none;
+    letter-spacing: 0.02em;
+}
+
+/* Botó de còpia del session ID */
+.toolbar-copy-btn {
+    background: transparent;
+    border: none;
+    color: #90caf9;
+    font-size: 13px;
+    cursor: pointer;
+    padding: 0 2px;
+    line-height: 1;
+    opacity: 0.7;
+    transition: opacity 0.15s;
+}
+.toolbar-copy-btn:hover { opacity: 1; }
+
+.toolbar-spacer { flex-grow: 1; }
+
+#btn-settings {
+    background: none;
+    border: none;
+    color: #fff;
+    font-size: 20px;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 6px;
+    transition: background 0.2s, transform 0.15s;
+    flex-shrink: 0;
+}
+
+#btn-settings:hover {
+    background: rgba(255,255,255,0.1);
+    transform: rotate(30deg);
+}
+
+/* --------------------------------------------------------------------------
+   Àrea principal: layout dual (board + panell)
+   -------------------------------------------------------------------------- */
+#main-area {
+    flex-grow: 1;
+    display: grid;
+    grid-template-columns: 1fr minmax(300px, 0.45fr);
+    overflow: hidden;
+}
+
+/* --------------------------------------------------------------------------
+   Columna esquerra: placa IoT-02
+   -------------------------------------------------------------------------- */
+#board-container {
+    position: relative;
+    overflow: hidden;
+    background: var(--bg-deep);
+}
+
+#board-image {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    pointer-events: none;
+    user-select: none;
+}
+
+/* --------------------------------------------------------------------------
+   Columna dreta: panell de control
+   -------------------------------------------------------------------------- */
+#control-panel {
+    display: flex;
+    flex-direction: column;
+    background: var(--bg);
+    border-left: 1px solid var(--border);
+    overflow: hidden;
+}
+
+/* -- Secció compilació -- */
+#compile-section {
+    flex-shrink: 0;
+    padding: 12px;
+    border-bottom: 1px solid var(--border);
+}
+
+#compile-section h2 {
+    color: var(--accent);
+    font-size: 13px;
+    margin-bottom: 8px;
+    font-weight: 600;
+}
+
+/* Zona d'upload */
+.upload-zone {
+    border: 2px dashed var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    font-size: 12px;
+    color: var(--fg-muted);
+}
+
+.upload-zone:hover {
+    border-color: var(--accent);
+    background: rgba(122,162,247,0.06);
+}
+
+/* Feedback visual en arrossegar */
+.upload-zone.dragover {
+    border-color: var(--green);
+    background: rgba(158,206,106,0.1);
+    color: var(--green);
+    transform: scale(1.01);
+}
+
+.upload-zone input[type="file"] { display: none; }
+
+.upload-zone .icon {
+    font-size: 1.5rem;
+    margin-bottom: 4px;
+    display: block;
+    transition: transform 0.2s;
+}
+
+.upload-zone.dragover .icon { transform: scale(1.3); }
+
+#compile-status {
+    font-size: 12px;
+    color: var(--fg-muted);
+    margin-top: 6px;
+    min-height: 1.2em;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* Icona de càrrega (spinner) */
+.spinner {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border: 2px solid rgba(224,175,104,0.3);
+    border-top-color: var(--yellow);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    flex-shrink: 0;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.actions-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+}
+
+/* Botons */
+.btn {
+    background: var(--accent);
+    color: var(--bg);
+    border: none;
+    padding: 5px 12px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-family: inherit;
+    font-weight: 600;
+    font-size: 12px;
+    transition: opacity 0.2s, transform 0.1s;
+    white-space: nowrap;
+}
+
+.btn:hover  { opacity: 0.85; }
+.btn:active { transform: scale(0.96); }
+.btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+
+.btn-green { background: var(--green); color: var(--bg); }
+.btn-red   { background: var(--red);   color: var(--bg); }
+.btn-small { padding: 3px 8px; font-size: 11px; }
+
+/* -- Secció Serial Monitor -- */
+#serial-section {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 12px;
+    min-height: 0;
+}
+
+#serial-section h2 {
+    color: var(--accent);
+    font-size: 13px;
+    margin-bottom: 8px;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+#serial-output {
+    background: #000;
+    color: var(--green);
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 11px;
+    padding: 8px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    flex-grow: 1;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    min-height: 100px;
+}
+
+.serial-input-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 6px;
+    flex-shrink: 0;
+}
+
+.serial-input-row input[type="text"] {
+    flex: 1;
+    background: var(--bg);
+    color: var(--fg);
+    border: 1px solid var(--border);
+    padding: 5px 8px;
+    border-radius: 4px;
+    font-family: inherit;
+    font-size: 12px;
+    outline: none;
+}
+
+.serial-input-row input[type="text"]:focus {
+    border-color: var(--accent);
+}
+
+/* --------------------------------------------------------------------------
+   Components interactius sobre la foto (posicionats en absolute)
+   -------------------------------------------------------------------------- */
+.interactive-button {
+    position: absolute;
+    cursor: pointer;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-radius: 4px;
+    background: rgba(255,255,255,0.05);
+    transition: background 0.1s, opacity 0.1s;
+    z-index: 20;
+}
+
+.interactive-button:hover {
+    background: rgba(255,255,255,0.15);
+    border-color: rgba(255,255,255,0.6);
+}
+
+.interactive-button.pressed {
+    background: rgba(255,255,255,0.35);
+    opacity: 0.8;
+}
+
+.interactive-led {
+    position: absolute;
+    border-radius: 3px;
+    transition: filter 0.2s, box-shadow 0.2s;
+    z-index: 20;
+    pointer-events: none;
+    /* Tooltip via title nativa del navegador */
+    cursor: default;
+}
+
+/* Tooltip GPIO als LEDs: el text és al title="..." del div,
+   afegim un petit indicator visual */
+.interactive-led::after {
+    content: attr(data-gpio-label);
+    position: absolute;
+    left: 110%;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(0,0,0,0.85);
+    color: var(--cyan);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    padding: 2px 5px;
+    border-radius: 3px;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s;
+    z-index: 30;
+}
+
+/* Mostrar tooltip quan el LED té pointer-events per debugging;
+   s'activa posant pointer-events: auto momentàniament via JS si cal,
+   o via el pare .interactive-led:hover (cal pointer-events: auto al LED) */
+
+.interactive-oled {
+    position: absolute;
+    background: #000;
+    border: 1px solid var(--cyan);
+    overflow: hidden;
+    z-index: 20;
+    pointer-events: none;
+}
+
+.oled-canvas {
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
+}
+
+.interactive-sensor {
+    position: absolute;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 20;
+    transition: opacity 0.2s, transform 0.15s;
+}
+
+.interactive-sensor:hover {
+    opacity: 0.85;
+    transform: scale(1.05);
+}
+
+.sensor-label {
+    color: white;
+    font-weight: bold;
+    text-align: center;
+    line-height: 1.2;
+    pointer-events: none;
+    font-size: 12px;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+}
+
+.ldr-sensor {
+    background: rgba(128,128,128,0.45);
+    border: 2px solid rgba(150,150,150,0.7);
+}
+
+.bme-sensor {
+    background: rgba(64,128,160,0.45);
+    border: 2px solid rgba(96,144,176,0.7);
+}
+
+.sensor-value-display {
+    position: absolute;
+    background: rgba(0,0,0,0.85);
+    color: white;
+    font-family: 'JetBrains Mono', monospace;
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: 1px solid #606060;
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 30;
+    line-height: 1.4;
+    font-size: 12px;
+}
+
+/* Popups dels sensors */
+.sensor-popup {
+    position: fixed;
+    background: #1e2030;
+    color: var(--fg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    padding: 16px;
+    z-index: 100;
+    min-width: 260px;
+    max-width: 90vw;   /* No desborda en mòbil */
+}
+
+.popup-section { margin-bottom: 14px; }
+.popup-section:last-child { margin-bottom: 0; }
+
+.popup-title {
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: var(--accent);
+}
+
+.popup-hint {
+    font-size: 11px;
+    color: var(--fg-muted);
+    margin-top: 6px;
+    text-align: center;
+}
+
+.sensor-popup input[type="range"] {
+    width: 100%;
+    margin: 0;
+    accent-color: var(--accent);
+    cursor: pointer;
+}
+
+/* --------------------------------------------------------------------------
+   Config Page (Overlay)
+   -------------------------------------------------------------------------- */
+#config-page {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.65);
+    backdrop-filter: blur(4px);
+    z-index: 200;
+    display: flex;           /* toggled via JS: none / flex */
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+}
+
+.config-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    width: 100%;
+    max-width: 480px;
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
+    box-shadow: 0 16px 48px rgba(0,0,0,0.5);
+}
+
+.config-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+}
+
+.config-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--accent);
+}
+
+.config-close {
+    background: none;
+    border: none;
+    color: var(--fg-muted);
+    font-size: 18px;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: color 0.15s, background 0.15s;
+    line-height: 1;
+}
+
+.config-close:hover {
+    color: var(--red);
+    background: rgba(247,118,142,0.1);
+}
+
+.config-section {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-bottom: 14px;
+    background: rgba(0,0,0,0.15);
+}
+
+.config-section legend {
+    padding: 0 6px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    color: var(--fg-muted);
+    text-transform: uppercase;
+}
+
+.config-field {
+    margin-top: 10px;
+}
+
+.config-field:first-child { margin-top: 0; }
+
+.config-field label {
+    display: block;
+    font-size: 12px;
+    color: var(--fg-muted);
+    margin-bottom: 4px;
+}
+
+.config-field input[type="text"],
+.config-field input[type="password"],
+.config-field input[type="number"] {
+    width: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    border: 1px solid var(--border);
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.config-field input:focus {
+    border-color: var(--accent);
+}
+
+.config-field small {
+    display: block;
+    font-size: 10px;
+    color: var(--fg-muted);
+    margin-top: 3px;
+}
+
+/* Checkbox inline */
+.config-inline label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--fg);
+    cursor: pointer;
+    margin-bottom: 0;
+}
+
+.config-inline input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--accent);
+    cursor: pointer;
+}
+
+/* Rang mínim/màxim */
+.config-range label {
+    font-size: 12px;
+    color: var(--fg-muted);
+    margin-bottom: 6px;
+}
+
+.range-inputs {
+    display: grid;
+    grid-template-columns: auto 1fr auto 1fr;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--fg-muted);
+}
+
+.range-inputs input {
+    background: var(--bg);
+    color: var(--fg);
+    border: 1px solid var(--border);
+    padding: 5px 8px;
+    border-radius: 6px;
+    font-size: 12px;
+    outline: none;
+    transition: border-color 0.2s;
+    width: 100%;
+}
+
+.range-inputs input:focus { border-color: var(--accent); }
+
+.config-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 20px;
+}
+
+.config-actions .btn {
+    padding: 7px 18px;
+    font-size: 13px;
+}
+
+.btn-primary {
+    background: var(--accent);
+    color: var(--bg);
+}
+
+.config-error {
+    margin-top: 10px;
+    padding: 8px 12px;
+    background: rgba(247,118,142,0.12);
+    border: 1px solid var(--red);
+    border-radius: 6px;
+    color: var(--red);
+    font-size: 12px;
+}
+
+/* --------------------------------------------------------------------------
+   Responsive: una sola columna en mòbil/tablet (≤ 768px)
+   -------------------------------------------------------------------------- */
+@media (max-width: 768px) {
+
+    /* Layout vertical: foto a dalt, panell a sota */
+    #main-area {
+        grid-template-columns: 1fr;
+        grid-template-rows: 50vh 1fr;  /* Foto ocupa el 50% */
+        overflow: hidden;
+    }
+
+    /* La foto té alçada limitada; la resta és scrollable dins el panell */
+    #board-container {
+        max-height: 50vh;
+        overflow: hidden;
+    }
+
+    /* Panell a sota: scroll intern */
+    #control-panel {
+        border-left: none;
+        border-top: 1px solid var(--border);
+        overflow-y: auto;
+    }
+
+    /* Serial Monitor: alçada mínima en mòbil */
+    #serial-output {
+        min-height: 120px;
+    }
+
+    /* Amagar elements de la toolbar que sobren */
+    .toolbar-separator { display: none; }
+    .status-label      { display: none; }
+
+    /* La MAC és massa ampla per mòbil */
+    .toolbar-mac { width: 17ch; font-size: 11px; }
+
+    /* Redimensionar el títol */
+    .app-title { font-size: 13px; }
+
+    /* Popup de sensors: centrat i limitat */
+    .sensor-popup {
+        left: 50% !important;
+        top: auto !important;
+        bottom: 16px;
+        transform: translateX(-50%) !important;
+        width: calc(100vw - 32px);
+        max-width: 360px;
+    }
+
+    /* ConfigPage: ocupa gairebé tota la pantalla */
+    .config-card {
+        padding: 16px;
+        max-height: calc(100vh - 20px);
+    }
+}
+
+/* Pantalla molt estreta (telèfons petits) */
+@media (max-width: 480px) {
+    #main-area {
+        grid-template-rows: 40vh 1fr;
+    }
+
+    #board-container {
+        max-height: 40vh;
+    }
+
+    .range-inputs {
+        grid-template-columns: auto 1fr auto 1fr;
+        font-size: 11px;
+    }
+
+    #toolbar { gap: 8px; padding: 0 10px; }
+}

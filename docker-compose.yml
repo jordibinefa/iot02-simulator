@@ -1,0 +1,46 @@
+services:
+  iot02sim:
+    build: .
+    container_name: iot02sim
+    restart: unless-stopped
+    extra_hosts:
+      - "broker.binefa.cat:host-gateway"
+    environment:
+      - ENABLE_VNC=${ENABLE_VNC:-false}
+      - MQTT_BROKER_USER=ecat
+      - MQTT_BROKER_PASS=clotClot
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.iot02sim.rule=Host(`iot02sim.binefa.cat`)"
+      - "traefik.http.routers.iot02sim.entrypoints=https"
+      - "traefik.http.routers.iot02sim.tls.certresolver=letsencrypt"
+      - "traefik.http.services.iot02sim.loadbalancer.server.port=3000"
+      - "traefik.http.middlewares.iot02sim-headers.headers.customrequestheaders.Connection=Upgrade"
+      - "traefik.http.routers.iot02sim.middlewares=iot02sim-headers,cors-headers@file"
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+          cpus: "6"
+    volumes:
+      - ./backend/QemuManager.js:/app/QemuManager.js
+      - ./backend/server.js:/app/server.js
+      - ./backend/MqttBridge.js:/app/MqttBridge.js
+      - ./backend/package.json:/app/package.json
+      - ./frontend/index.html:/app/frontend/index.html
+      - ./frontend/css:/app/frontend/css
+      - ./frontend/js:/app/frontend/js
+      - ./frontend/imatges:/app/frontend/imatges
+      - ./qemu-devices/ethernet_shim:/app/ethernet_shim
+      - iot02sim-cache:/app/cache
+      - iot02sim-firmware:/app/firmware
+    networks:
+      - proxy
+
+volumes:
+  iot02sim-cache:
+  iot02sim-firmware:
+
+networks:
+  proxy:
+    external: true

@@ -1,0 +1,46 @@
+{
+  "packages": [
+    {
+      "name": "iot02",
+      "maintainer": "Jordi Binefa - IoT-02 QEMU Simulator",
+      "websiteURL": "https://iot02sim.binefa.cat",
+      "email": "jordi@binefa.cat",
+      "help": {
+        "online": "https://iot02sim.binefa.cat"
+      },
+      "platforms": [
+        {
+          "name": "ESP32-QEMU (IoT-02 Simulator)",
+          "architecture": "esp32",
+          "version": "3.0.7",
+          "category": "ESP32",
+          "url": "https://iot02sim.binefa.cat/arduino/esp32-qemu-iot02-3.0.7.zip",
+          "archiveFileName": "esp32-qemu-iot02-3.0.7.zip",
+          "checksum": "SHA-256:2ab866a98feed113b5a3acfeac19f33a0bd439cf556c962efa66b103ffeede01",
+          "size": "74827781",
+          "help": {
+            "online": "https://iot02sim.binefa.cat"
+          },
+          "boards": [
+            {
+              "name": "ESP32-QEMU (IoT-02 Simulator)"
+            }
+          ],
+          "toolsDependencies": [
+            {
+              "packager": "esp32",
+              "name": "esp-x32",
+              "version": "2302"
+            },
+            {
+              "packager": "esp32",
+              "name": "esptool_py",
+              "version": "4.6"
+            }
+          ]
+        }
+      ],
+      "tools": []
+    }
+  ]
+}

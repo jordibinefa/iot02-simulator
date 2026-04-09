@@ -1,0 +1,19 @@
+{
+  "name": "esp32-simulator-backend",
+  "version": "1.0.0",
+  "description": "ESP32 simulator backend: compile + QEMU session management",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "multer": "^1.4.5-lts.1",
+    "ws": "^8.18.0",
+    "cookie-parser": "^1.4.6",
+    "uuid": "^10.0.0",
+    "mqtt": "^5.10.1",
+    "pngjs": "^7.0.0"
+  }
+}
