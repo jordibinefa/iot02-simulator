@@ -85,15 +85,22 @@ git clone https://github.com/jordibinefa/iot02-simulator.git
 cd iot02-simulator
 ```
 
-### 3. Arrencar
+### 3. Descarregar la imatge precompilada
+
+```bash
+docker pull jordibinefa/iot02sim:latest
+```
+
+Descarrega la imatge precompilada (~2,8 GB) des de Docker Hub. **No cal compilar res localment.**
+La imatge inclou un QEMU parchejat, arduino-cli, esp32:esp32@3.0.7 i totes les dependències.
+
+### 4. Arrencar
 
 ```bash
 docker compose -f docker-compose.local.yml up -d
 ```
 
-La primera vegada descarrega la imatge precompilada (~2,8 GB). No cal compilar res localment.
-
-### 4. Verificar
+### 5. Verificar
 
 Obre `http://localhost:5555` al navegador.
 
@@ -134,15 +141,18 @@ Durant la instal·lació, assegura't que l'opció **"Use the WSL 2 based engine"
 Un cop instal·lat, obre Docker Desktop → **Settings → Resources → WSL Integration** i activa
 la integració amb la teva distribució Ubuntu.
 
-### 3. Clonar i arrencar
+### 3. Descarregar la imatge i arrencar
 
 Obre el terminal d'Ubuntu (WSL):
 
 ```bash
 git clone https://github.com/jordibinefa/iot02-simulator.git
 cd iot02-simulator
+docker pull jordibinefa/iot02sim:latest
 docker compose -f docker-compose.local.yml up -d
 ```
+
+Descarrega la imatge precompilada (~2,8 GB) des de Docker Hub. **No cal compilar res localment.**
 
 ### 4. Verificar
 
@@ -177,9 +187,10 @@ cd iot02-simulator
 sed -i 's/iot02sim.exemple.cat/iot02sim.elteudomain.cat/g' docker-compose.vps.yml
 ```
 
-### 3. Arrencar
+### 3. Descarregar la imatge i arrencar
 
 ```bash
+docker pull jordibinefa/iot02sim:latest
 docker compose -f docker-compose.vps.yml up -d
 ```
 
