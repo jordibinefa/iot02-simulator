@@ -155,8 +155,10 @@ This downloads the pre-built image (~2.8 GB) from Docker Hub. **No local compila
 
 ### 4. Verify
 
-Open `http://localhost:5555` in your Windows browser (Chrome, Edge...).
-
+Open `http://localhost:5555` in your Windows browser (Chrome, Edge...). If it doesn't work the first time, repeat again:
+```bash
+docker compose -f docker-compose.local.yml up -d
+```
 > **Note:** WSL2 automatically forwards ports to the Windows host. No extra configuration needed.
 
 ---
