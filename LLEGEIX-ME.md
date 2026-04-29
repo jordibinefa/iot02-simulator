@@ -156,7 +156,10 @@ Descarrega la imatge precompilada (~2,8 GB) des de Docker Hub. **No cal compilar
 
 ### 4. Verificar
 
-Obre `http://localhost:5555` al navegador de Windows (Chrome, Edge...).
+Obre `http://localhost:5555` al navegador de Windows (Chrome, Edge...). Si no funciona bé el primer cop, repetiu un altre cop:
+```bash
+docker compose -f docker-compose.local.yml up -d
+```
 
 > **Nota:** WSL2 reenvía automàticament els ports al sistema Windows. No cal configurar res addicional.
 
