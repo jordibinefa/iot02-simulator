@@ -2,13 +2,10 @@
 
 > **[Read in English](README.md)**
 
-Simulador web per a la placa **IoT-02** (ESP32-S3), basat en un QEMU parchejat amb emulació
+Simulador web per a la placa **IoT-02** (ESP32-S3), basat en un QEMU adaptat (patched) amb emulació
 personalitzada de la pantalla SSD1306 OLED, el sensor BME280 i la interfície OpenEth.
-Compila esketxos Arduino al navegador, puja'ls i interactua amb un bessó digital en viu —
+Compila els codis d'Arduino al navegador, puja els binaris i interactua amb un bessó digital en viu —
 sense necessitat de tenir cap placa física.
-
-Desenvolupat en un centre de Formació Professional de Catalunya com a part d'un conjunt
-d'eines educatives obertes.
 
 ## Com funciona
 
