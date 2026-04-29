@@ -3,11 +3,7 @@
 > **[Llegeix-me en català](LLEGEIX-ME.md)**
 
 A browser-based simulator for the **IoT-02 board** (ESP32-S3), powered by a patched QEMU
-with custom SSD1306 OLED, BME280 and OpenEth emulation. Compile Arduino sketches in the
-browser, upload them, and interact with a live digital twin — no physical board required.
-
-Developed at a Formació Professional (Vocational Training) centre in Catalonia as part of an
-open educational toolset.
+with custom SSD1306 OLED, BME280 and OpenEth emulation. Compile Arduino sketches in your computer, upload binaries, and interact with a live digital twin — no physical board required.
 
 ## How it works
 
