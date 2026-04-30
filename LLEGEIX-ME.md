@@ -105,6 +105,9 @@ Obre `http://localhost:5555` al navegador.
 curl http://localhost:5555/status
 ```
 
+El broker MQTT també és accessible a `localhost:1883` (MQTT) i `localhost:9001` (WebSockets),
+sense usuari ni contrasenya.
+
 ---
 
 ## Opció B — Windows amb WSL2
@@ -158,6 +161,9 @@ Obre `http://localhost:5555` al navegador de Windows (Chrome, Edge...). Si no fu
 docker compose -f docker-compose.local.yml up -d
 ```
 
+El broker MQTT també és accessible a `localhost:1883` (MQTT) i `localhost:9001` (WebSockets),
+sense usuari ni contrasenya.
+
 > **Nota:** WSL2 reenvía automàticament els ports al sistema Windows. No cal configurar res addicional.
 
 ---
@@ -206,6 +212,17 @@ curl https://iot02sim.elteudomain.cat/status
 
 Copia `middlewares-cors.yml` al directori de configuració dinàmica de Traefik i afegeix els
 orígens permesos. El fitxer ja inclou `https://snap.berkeley.edu` per a la integració amb Snap!
+
+---
+
+## Configuració de l'IDE d'Arduino
+
+Per compilar sketches i generar binaris compatibles amb el simulador, consulta:
+
+**[ARDUINO-IDE.ca.md](ARDUINO-IDE.ca.md)**
+
+Aquesta guia explica com instal·lar el core esp32 3.0.7, afegir el board package IoT-02,
+exportar el binari compilat i carregar-lo al simulador local o en línia.
 
 ---
 
@@ -320,10 +337,13 @@ iot02-simulator/
 ├── libraries/              ← Llibreries Arduino incloses a la imatge
 ├── Dockerfile              ← Build en dos stages: QEMU + servei Node.js
 ├── entrypoint.sh
-├── mosquitto.conf          ← Configuració mínima de Mosquitto
-├── docker-compose.local.yml  ← Ús local (VM / WSL), port 5555
+├── mosquitto.conf          ← Configuració mínima de Mosquitto (anònim, sense auth)
+├── docker-compose.local.yml  ← Ús local (VM / WSL), port 5555, imatge precompilada
+├── docker-compose.yml        ← Ús local (VM / WSL), port 5555, build des del codi font
 ├── docker-compose.vps.yml    ← VPS amb Traefik + HTTPS
 ├── middlewares-cors.yml    ← Middleware CORS de Traefik
+├── ARDUINO-IDE.md          ← Arduino IDE setup guide (English)
+├── ARDUINO-IDE.ca.md       ← Guia de configuració de l'IDE d'Arduino (català)
 ├── README.md               ← Anglès
 └── LLEGEIX-ME.md           ← Aquest fitxer (català)
 ```
@@ -332,12 +352,13 @@ iot02-simulator/
 
 ## Compilar des del codi font
 
-Si prefereixes compilar la imatge localment en lloc de descarregar-la de Docker Hub:
+Si prefereixes compilar la imatge localment en lloc de descarregar-la de Docker Hub,
+fes servir `docker-compose.yml` (que munta els fitxers font locals i compila la imatge):
 
 ```bash
 git clone https://github.com/jordibinefa/iot02-simulator.git
 cd iot02-simulator
-docker build -t jordibinefa/iot02sim:latest .
+docker compose up -d
 ```
 
 El build compila QEMU (fork calib) amb els patches d'ESP32-S3, instal·la arduino-cli,

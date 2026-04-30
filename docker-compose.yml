@@ -1,14 +1,28 @@
 services:
+
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: iot02sim-mosquitto
+    restart: unless-stopped
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    networks:
+      - iot02sim-net
+
   iot02sim:
     build: .
     container_name: iot02sim
     restart: unless-stopped
-    extra_hosts:
-      - "broker.binefa.cat:host-gateway"
+    depends_on:
+      - mosquitto
     environment:
       - ENABLE_VNC=${ENABLE_VNC:-false}
-      - MQTT_BROKER_USER=ecat
-      - MQTT_BROKER_PASS=clotClot
+      - MQTT_BRIDGE_URL=mqtt://iot02sim-mosquitto:1883
+      - MQTT_BROKER_HOST=iot02sim-mosquitto
+      - MQTT_BROKER_PORT=1883
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.iot02sim.rule=Host(`iot02sim.binefa.cat`)"
@@ -35,12 +49,11 @@ services:
       - iot02sim-cache:/app/cache
       - iot02sim-firmware:/app/firmware
     networks:
-      - proxy
+      - iot02sim-net
 
 volumes:
   iot02sim-cache:
   iot02sim-firmware:
 
 networks:
-  proxy:
-    external: true
+  iot02sim-net:

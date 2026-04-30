@@ -103,6 +103,9 @@ Open `http://localhost:5555` in your browser.
 curl http://localhost:5555/status
 ```
 
+The MQTT broker is also available at `localhost:1883` (MQTT) and `localhost:9001` (WebSockets),
+with no username or password required.
+
 ---
 
 ## Option B — Windows with WSL2
@@ -155,6 +158,10 @@ Open `http://localhost:5555` in your Windows browser (Chrome, Edge...). If it do
 ```bash
 docker compose -f docker-compose.local.yml up -d
 ```
+
+The MQTT broker is also available at `localhost:1883` (MQTT) and `localhost:9001` (WebSockets),
+with no username or password required.
+
 > **Note:** WSL2 automatically forwards ports to the Windows host. No extra configuration needed.
 
 ---
@@ -203,6 +210,17 @@ curl https://iot02sim.yourdomain.com/status
 
 Copy `middlewares-cors.yml` to your Traefik dynamic configuration directory and add your
 allowed origins. The file already includes `https://snap.berkeley.edu` for Snap! integration.
+
+---
+
+## Arduino IDE setup
+
+To compile sketches and generate binaries compatible with the simulator, see:
+
+**[ARDUINO-IDE.md](ARDUINO-IDE.md)**
+
+This guide covers installing the esp32 core 3.0.7, adding the IoT-02 board package, exporting
+compiled binaries, and loading them into either the local or online simulator.
 
 ---
 
@@ -317,10 +335,13 @@ iot02-simulator/
 ├── libraries/              ← Arduino libraries bundled in the image
 ├── Dockerfile              ← Two-stage build: QEMU + Node.js service
 ├── entrypoint.sh
-├── mosquitto.conf          ← Minimal Mosquitto configuration
-├── docker-compose.local.yml  ← Local use (VM / WSL), port 5555
+├── mosquitto.conf          ← Minimal Mosquitto configuration (anonymous, no auth)
+├── docker-compose.local.yml  ← Local use (VM / WSL), port 5555, pre-built image
+├── docker-compose.yml        ← Local use (VM / WSL), port 5555, build from source
 ├── docker-compose.vps.yml    ← VPS with Traefik + HTTPS
 ├── middlewares-cors.yml    ← Traefik CORS middleware
+├── ARDUINO-IDE.md          ← Arduino IDE setup guide (English)
+├── ARDUINO-IDE.ca.md       ← Guia de configuració de l'IDE d'Arduino (català)
 ├── README.md               ← This file (English)
 └── LLEGEIX-ME.md           ← Català
 ```
@@ -329,12 +350,13 @@ iot02-simulator/
 
 ## Building from source
 
-If you prefer to build the image locally instead of pulling from Docker Hub:
+If you prefer to build the image locally instead of pulling from Docker Hub, use
+`docker-compose.yml` (which mounts the local source files and builds the image):
 
 ```bash
 git clone https://github.com/jordibinefa/iot02-simulator.git
 cd iot02-simulator
-docker build -t jordibinefa/iot02sim:latest .
+docker compose up -d
 ```
 
 The build compiles QEMU (calib fork) with ESP32-S3 patches, installs arduino-cli, downloads
