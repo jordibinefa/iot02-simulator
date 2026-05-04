@@ -99,7 +99,7 @@ docker compose -f docker-compose.local.yml up -d
 
 ### 5. Verificar
 
-Obre `http://localhost:5555` al navegador.
+Obre `http://localhost:5555` al navegador. La interfície selecciona automàticament l'idioma segons les preferències del navegador (català, castellà o anglès). Per forçar un idioma concret, navega directament a `index.ca.html`, `index.en.html` o `index.es.html`.
 
 ```bash
 curl http://localhost:5555/status
@@ -156,7 +156,7 @@ Descarrega la imatge precompilada (~2,8 GB) des de Docker Hub. **No cal compilar
 
 ### 4. Verificar
 
-Obre `http://localhost:5555` al navegador de Windows (Chrome, Edge...). Si no funciona bé el primer cop, repetiu un altre cop:
+Obre `http://localhost:5555` al navegador de Windows (Chrome, Edge...). La interfície selecciona automàticament l'idioma del navegador. Si no funciona bé el primer cop, repetiu un altre cop:
 ```bash
 docker compose -f docker-compose.local.yml up -d
 ```
@@ -326,9 +326,14 @@ iot02-simulator/
 │   ├── MqttBridge.js       ← Pont bidireccional MQTT ↔ QEMU
 │   └── package.json
 ├── frontend/
-│   ├── index.html          ← Frontend complet (editor + UI del bessó digital)
+│   ├── index.html          ← Detector d'idioma (redirigeix a index.ca/en/es.html)
+│   ├── index.ca.html       ← Interfície en català
+│   ├── index.en.html       ← Interfície en anglès
+│   ├── index.es.html       ← Interfície en castellà
 │   ├── css/
 │   ├── js/
+│   │   ├── i18n.js         ← Traduccions de la interfície (ca / en / es)
+│   │   └── ...
 │   └── imatges/
 ├── qemu-devices/
 │   └── ethernet_shim/      ← Headers C injectats als sketches per a la xarxa QEMU
@@ -385,6 +390,9 @@ Espera uns minuts. Comprova que el DNS ja apunta al VPS: `dig iot02sim.elteudoma
 
 **Error "arduino-cli not found" durant el build**
 Reconstrueix des de zero: `docker build --no-cache -t jordibinefa/iot02sim:latest .`
+
+**La interfície es mostra en l'idioma incorrecte**
+L'idioma es detecta de les preferències del navegador. Per forçar un idioma, navega directament a `index.ca.html`, `index.en.html` o `index.es.html`.
 
 ---
 

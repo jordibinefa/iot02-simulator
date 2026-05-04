@@ -97,7 +97,7 @@ docker compose -f docker-compose.local.yml up -d
 
 ### 5. Verify
 
-Open `http://localhost:5555` in your browser.
+Open `http://localhost:5555` in your browser. The interface automatically selects the language based on your browser settings (Catalan, Spanish or English). To force a specific language, navigate directly to `index.ca.html`, `index.en.html` or `index.es.html`.
 
 ```bash
 curl http://localhost:5555/status
@@ -154,7 +154,7 @@ This downloads the pre-built image (~2.8 GB) from Docker Hub. **No local compila
 
 ### 4. Verify
 
-Open `http://localhost:5555` in your Windows browser (Chrome, Edge...). If it doesn't work the first time, repeat again:
+Open `http://localhost:5555` in your Windows browser (Chrome, Edge...). The interface automatically selects the language based on your browser settings. If it doesn't work the first time, repeat again:
 ```bash
 docker compose -f docker-compose.local.yml up -d
 ```
@@ -324,9 +324,14 @@ iot02-simulator/
 │   ├── MqttBridge.js       ← Bidirectional MQTT ↔ QEMU bridge
 │   └── package.json
 ├── frontend/
-│   ├── index.html          ← Full frontend (editor + digital twin UI)
+│   ├── index.html          ← Language detector (redirects to index.ca/en/es.html)
+│   ├── index.ca.html       ← Catalan UI
+│   ├── index.en.html       ← English UI
+│   ├── index.es.html       ← Spanish UI
 │   ├── css/
 │   ├── js/
+│   │   ├── i18n.js         ← UI translations (ca / en / es)
+│   │   └── ...
 │   └── imatges/
 ├── qemu-devices/
 │   └── ethernet_shim/      ← C headers injected into sketches for QEMU networking
@@ -383,6 +388,9 @@ Wait a few minutes. Check DNS: `dig iot02sim.yourdomain.com`
 
 **"arduino-cli not found" during build**
 Rebuild from scratch: `docker build --no-cache -t jordibinefa/iot02sim:latest .`
+
+**Interface shows in the wrong language**
+The language is detected from browser preferences. To force a language, navigate directly to `index.ca.html`, `index.en.html` or `index.es.html`.
 
 ---
 

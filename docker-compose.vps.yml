@@ -38,6 +38,11 @@ services:
     volumes:
       - iot02sim-cache:/app/cache
       - iot02sim-firmware:/app/firmware
+      - ./frontend/index.html:/app/frontend/index.html
+      - ./frontend/index.ca.html:/app/frontend/index.ca.html
+      - ./frontend/index.en.html:/app/frontend/index.en.html
+      - ./frontend/index.es.html:/app/frontend/index.es.html
+      - ./frontend/js/i18n.js:/app/frontend/js/i18n.js
     networks:
       - proxy
 
