@@ -653,12 +653,16 @@ if (sessionIdDisplay) {
 }
 if (btnCopySession) {
     btnCopySession.addEventListener('click', () => {
-        navigator.clipboard.writeText(sessionId).then(() => {
-            btnCopySession.textContent = T.btnCopyDone;
-            setTimeout(() => { btnCopySession.textContent = T.btnCopySession; }, 1500);
-        }).catch(() => {
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(sessionId).then(() => {
+                btnCopySession.textContent = T.btnCopyDone;
+                setTimeout(() => { btnCopySession.textContent = T.btnCopySession; }, 1500);
+            }).catch(() => {
+                prompt(T.sessionIdPrompt, sessionId);
+            });
+        } else {
             prompt(T.sessionIdPrompt, sessionId);
-        });
+        }
     });
 }
 
