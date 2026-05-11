@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IoT-02 State</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Courier New', monospace;
+      background: #0d1117;
+      color: #c9d1d9;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      gap: 2rem;
+      padding: 2rem;
+    }
+
+    h1 {
+      font-size: 1.1rem;
+      color: #8b949e;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    /* ── Missatge principal ── */
+    #msg-box {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 2rem 3rem;
+      text-align: center;
+      min-width: 320px;
+      max-width: 600px;
+      width: 100%;
+    }
+
+    #msg-text {
+      font-size: 2rem;
+      color: #58a6ff;
+      word-break: break-word;
+      min-height: 2.5rem;
+      transition: color 0.3s;
+    }
+
+    #msg-text.flash {
+      color: #3fb950;
+    }
+
+    #msg-time {
+      margin-top: 0.75rem;
+      font-size: 0.75rem;
+      color: #484f58;
+    }
+
+    /* ── Indicador de connexió ── */
+    #status {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.8rem;
+      color: #8b949e;
+    }
+
+    #dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #3fb950;
+      transition: background 0.3s;
+    }
+
+    #dot.error { background: #f85149; }
+    #dot.waiting { background: #d29922; }
+
+    /* ── Formulari manual ── */
+    #form-box {
+      display: flex;
+      gap: 0.5rem;
+      width: 100%;
+      max-width: 600px;
+    }
+
+    #input-msg {
+      flex: 1;
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      color: #c9d1d9;
+      font-family: inherit;
+      font-size: 0.95rem;
+      padding: 0.5rem 0.75rem;
+      outline: none;
+    }
+
+    #input-msg:focus { border-color: #58a6ff; }
+
+    button {
+      background: #21262d;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      color: #c9d1d9;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 0.9rem;
+      padding: 0.5rem 1rem;
+      transition: background 0.2s, border-color 0.2s;
+    }
+
+    button:hover { background: #30363d; border-color: #8b949e; }
+    button:active { background: #388bfd22; border-color: #58a6ff; }
+
+    /* ── Historial ── */
+    #log-box {
+      width: 100%;
+      max-width: 600px;
+    }
+
+    #log-title {
+      font-size: 0.75rem;
+      color: #484f58;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 0.5rem;
+    }
+
+    #log {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 0.75rem;
+      font-size: 0.8rem;
+      color: #8b949e;
+      max-height: 160px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column-reverse; /* més recent a dalt */
+      gap: 0.2rem;
+    }
+
+    .log-entry { border-bottom: 1px solid #21262d; padding-bottom: 0.2rem; }
+    .log-entry:last-child { border-bottom: none; }
+
+    /* ── curl hint ── */
+    #curl-hint {
+      font-size: 0.72rem;
+      color: #484f58;
+      background: #161b22;
+      border: 1px solid #21262d;
+      border-radius: 6px;
+      padding: 0.6rem 1rem;
+      width: 100%;
+      max-width: 600px;
+      word-break: break-all;
+    }
+
+    #curl-hint span { color: #8b949e; }
+  </style>
+</head>
+<body>
+
+  <h1>IoT-02 · State monitor</h1>
+
+  <div id="msg-box">
+    <div id="msg-text">—</div>
+    <div id="msg-time">esperant primer missatge...</div>
+  </div>
+
+  <div id="status">
+    <div id="dot" class="waiting"></div>
+    <span id="status-text">connectant...</span>
+  </div>
+
+  <div id="form-box">
+    <input id="input-msg" type="text" placeholder='missatge manual, p.ex. "IO0 pressed"' maxlength="256">
+    <button onclick="sendMessage()">Enviar PUT</button>
+  </div>
+
+  <div id="log-box">
+    <div id="log-title">Historial</div>
+    <div id="log"></div>
+  </div>
+
+  <div id="curl-hint">
+    <span>curl:</span>
+    curl -X PUT -H "Content-Type: application/json"
+    -d '{"message":"IO0 pressed"}'
+    <span id="base-url-hint"></span>/state
+  </div>
+
+  <script>
+    const BASE = window.location.origin; // https://iot02sim.binefa.cat o localhost:5555
+    document.getElementById('base-url-hint').textContent = BASE;
+
+    let lastUpdatedAt = 0;
+    let pollOk = true;
+
+    // ── Polling cada 1 s ──────────────────────────────────────────────────────
+    async function poll() {
+      try {
+        const r = await fetch(BASE + '/state');
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const data = await r.json();
+
+        setStatus(true);
+
+        if (data.updatedAt !== lastUpdatedAt) {
+          lastUpdatedAt = data.updatedAt;
+          showMessage(data.message, data.updatedAt);
+        }
+      } catch (e) {
+        setStatus(false, e.message);
+      }
+    }
+
+    // ── Mostrar missatge nou ──────────────────────────────────────────────────
+    function showMessage(msg, ts) {
+      const el = document.getElementById('msg-text');
+      el.textContent = msg || '(buit)';
+
+      // Flash verd breu
+      el.classList.add('flash');
+      setTimeout(() => el.classList.remove('flash'), 600);
+
+      // Hora
+      const d = new Date(ts);
+      document.getElementById('msg-time').textContent =
+        d.toLocaleTimeString('ca-ES', { hour12: false }) + '.' +
+        String(d.getMilliseconds()).padStart(3, '0');
+
+      // Afegir a historial
+      const entry = document.createElement('div');
+      entry.className = 'log-entry';
+      entry.textContent =
+        d.toLocaleTimeString('ca-ES', { hour12: false }) + '  ' + msg;
+      document.getElementById('log').prepend(entry);
+
+      // Limitar historial a 50 entrades
+      const log = document.getElementById('log');
+      while (log.children.length > 50) log.removeChild(log.lastChild);
+    }
+
+    // ── Indicador de connexió ─────────────────────────────────────────────────
+    function setStatus(ok, detail) {
+      const dot  = document.getElementById('dot');
+      const span = document.getElementById('status-text');
+      if (ok) {
+        dot.className = '';
+        span.textContent = 'connectat · polling 1 s';
+      } else {
+        dot.className = 'error';
+        span.textContent = 'error: ' + (detail || '?');
+      }
+    }
+
+    // ── Enviar missatge manual ────────────────────────────────────────────────
+    async function sendMessage() {
+      const inp = document.getElementById('input-msg');
+      const msg = inp.value.trim();
+      if (!msg) return;
+
+      try {
+        const r = await fetch(BASE + '/state', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: msg })
+        });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        inp.value = '';
+        await poll(); // actualitzar de seguida
+      } catch (e) {
+        setStatus(false, e.message);
+      }
+    }
+
+    // Enter al camp d'entrada
+    document.getElementById('input-msg')
+      .addEventListener('keydown', e => { if (e.key === 'Enter') sendMessage(); });
+
+    // ── Inici ─────────────────────────────────────────────────────────────────
+    poll();
+    setInterval(poll, 1000);
+  </script>
+
+</body>
+</html>
