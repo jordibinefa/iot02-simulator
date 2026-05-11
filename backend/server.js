@@ -782,6 +782,37 @@ app.get('/proxy', async (req, res) => {
   }
 });
 
+// ─── Estat compartit (clau/valor, persistent en memòria) ───────────────────────
+// GET  /state        → retorna { message, updatedAt }
+// PUT  /state        → body JSON { message: "text" } → actualitza i retorna igual
+//
+// Ús des de terminal:
+//   curl https://iot02sim.binefa.cat/state
+//   curl -X PUT -H "Content-Type: application/json" \
+//        -d '{"message":"IO0 pressed"}' \
+//        https://iot02sim.binefa.cat/state
+//
+// Ús des de sketch (via proxy QEMU):
+//   PUT http://192.168.4.1:3000/state   body JSON { "message": "IO0 pressed" }
+
+let g_state = { message: '', updatedAt: 0 };
+
+app.get('/state', (req, res) => {
+  res.json(g_state);
+});
+
+app.put('/state', (req, res) => {
+  const szMsg = (req.body && typeof req.body.message === 'string')
+    ? req.body.message.substring(0, 256) // màxim 256 caràcters
+    : '';
+  if (szMsg === '') {
+    return res.status(400).json({ error: 'Camp "message" obligatori i no buit' });
+  }
+  g_state = { message: szMsg, updatedAt: Date.now() };
+  console.log(`[State] "${szMsg}"`);
+  res.json(g_state);
+});
+
 // ─── WebSocket handling ───
 server.on('upgrade', (request, socket, head) => {
   const url = new URL(request.url, `http://${request.headers.host}`);
