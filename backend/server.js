@@ -706,85 +706,143 @@ app.get('/status', (req, res) => {
   });
 });
 
-// ─── Proxy HTTP per fetch d'URLs externes des del frontend (evita CORS) ───
-// Ús: GET /proxy?url=https://example.com/firmware.bin
-// Restriccions: només HTTPS, mida màxima CONFIG.maxCodeSize, timeout 15s
-// Segueix fins a 1 redirecció (GitHub raw en fa una)
+// ─── Proxy HTTP/HTTPS per a GET, PUT i POST d'URLs externes ──────────────────
+//
+// GET  /proxy?url=https://example.com/firmware.bin
+//      → descarrega i retorna el contingut (fronted, firmware QEMU via GET)
+//
+// PUT  /proxy?url=http://master.iotvertebrae.com:2900/iot02
+// POST /proxy?url=http://master.iotvertebrae.com:2900/iot02
+//      → reenvia el body JSON al destí (firmware QEMU → Node-RED o qualsevol API)
+//
+// El Content-Type retornat és sempre el de l'upstream (no s'endevina pel nom).
+// Segueix fins a 1 redirecció (GitHub raw en fa una).
+// Timeout: 15 s. Mida màxima resposta: CONFIG.maxCodeSize.
+//
+// Ús des del firmware QEMU (mode simulador):
+//   GET  http://192.168.4.1:3000/proxy?url=https://xavierpi.com/mac_new
+//   PUT  http://192.168.4.1:3000/proxy?url=http://master.iotvertebrae.com:2900/iot02
+//        body: {"message":"IO0 pressed"}
+
 const https_mod = require('https');
+const http_mod  = require('http');
 
-app.get('/proxy', async (req, res) => {
+// Funció auxiliar: fa una petició HTTP/HTTPS i retorna { statusCode, contentType, buf }
+// method: 'GET' | 'PUT' | 'POST'
+// body:   Buffer o null
+// bodyContentType: string o null
+function proxyRequest(url, method, body, bodyContentType, redirectCount = 0) {
+  return new Promise((resolve, reject) => {
+    if (redirectCount > 1) return reject(new Error('Massa redireccions'));
+
+    let parsed;
+    try { parsed = new URL(url); } catch { return reject(new Error('URL invàlida')); }
+
+    const mod = parsed.protocol === 'https:' ? https_mod : http_mod;
+
+    const options = {
+      method,
+      hostname: parsed.hostname,
+      port:     parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
+      path:     parsed.pathname + parsed.search,
+      timeout:  15_000,
+      headers:  {}
+    };
+
+    if (body && body.length > 0) {
+      options.headers['Content-Type']   = bodyContentType || 'application/json';
+      options.headers['Content-Length'] = body.length;
+    }
+
+    const request = mod.request(options, (upstream) => {
+      // Seguir redirecció (GET/HEAD únicament; PUT/POST no es redirigeixen)
+      if (upstream.statusCode >= 300 && upstream.statusCode < 400 &&
+          upstream.headers.location && method === 'GET') {
+        let redirUrl;
+        try { redirUrl = new URL(upstream.headers.location, url).href; }
+        catch { return reject(new Error('Redirecció invàlida')); }
+        upstream.resume();
+        return proxyRequest(redirUrl, method, body, bodyContentType, redirectCount + 1)
+          .then(resolve).catch(reject);
+      }
+
+      const contentType = upstream.headers['content-type'] || 'text/plain';
+      const chunks = [];
+      let totalSize = 0;
+
+      upstream.on('data', chunk => {
+        totalSize += chunk.length;
+        if (totalSize > CONFIG.maxCodeSize) {
+          upstream.destroy();
+          return reject(new Error('Resposta massa gran'));
+        }
+        chunks.push(chunk);
+      });
+      upstream.on('end', () => resolve({
+        statusCode:  upstream.statusCode,
+        contentType,
+        buf: Buffer.concat(chunks)
+      }));
+      upstream.on('error', reject);
+    });
+
+    request.on('error', reject);
+    request.on('timeout', () => { request.destroy(); reject(new Error('Timeout')); });
+
+    if (body && body.length > 0) request.write(body);
+    request.end();
+  });
+}
+
+// Handler comú per a GET, PUT i POST
+async function handleProxy(req, res) {
   const rawUrl = req.query.url;
-
-  // Validació bàsica
-  if (!rawUrl) {
-    return res.status(400).json({ error: 'Paràmetre url és obligatori' });
-  }
+  if (!rawUrl) return res.status(400).json({ error: 'Paràmetre url és obligatori' });
 
   let parsedUrl;
-  try {
-    parsedUrl = new URL(rawUrl);
-  } catch {
-    return res.status(400).json({ error: 'URL invàlida' });
+  try { parsedUrl = new URL(rawUrl); }
+  catch { return res.status(400).json({ error: 'URL invàlida' }); }
+
+  if (parsedUrl.protocol !== 'https:' && parsedUrl.protocol !== 'http:') {
+    return res.status(400).json({ error: 'Només HTTP o HTTPS' });
   }
 
-  // Només HTTPS per seguretat
-  if (parsedUrl.protocol !== 'https:') {
-    return res.status(400).json({ error: 'Només es permeten URLs HTTPS' });
-  }
+  const method = req.method; // 'GET', 'PUT' o 'POST'
 
-  // Funció auxiliar: descarrega una URL HTTPS i retorna els chunks
-  function fetchUrl(url) {
-    return new Promise((resolve, reject) => {
-      const req = https_mod.get(url, { timeout: 15_000 }, (upstream) => {
-        // Segueix una única redirecció (GitHub raw → raw.githubusercontent.com, etc.)
-        if (upstream.statusCode >= 300 && upstream.statusCode < 400 && upstream.headers.location) {
-          let redirUrl;
-          try { redirUrl = new URL(upstream.headers.location, url).href; }
-          catch { return reject(new Error('Redirecció invàlida')); }
-          if (!redirUrl.startsWith('https://')) return reject(new Error('Redirecció no-HTTPS'));
-          return fetchUrl(redirUrl).then(resolve).catch(reject);
-        }
-
-        if (upstream.statusCode !== 200) {
-          return reject(new Error(`HTTP ${upstream.statusCode}`));
-        }
-
-        const chunks = [];
-        let totalSize = 0;
-        upstream.on('data', chunk => {
-          totalSize += chunk.length;
-          if (totalSize > CONFIG.maxCodeSize) {
-            upstream.destroy();
-            return reject(new Error('Fitxer massa gran'));
-          }
-          chunks.push(chunk);
-        });
-        upstream.on('end', () => resolve(Buffer.concat(chunks)));
-        upstream.on('error', reject);
-      });
-      req.on('error', reject);
-      req.on('timeout', () => { req.destroy(); reject(new Error('Timeout de connexió')); });
-    });
+  // Per a PUT/POST: llegir el body raw que ha enviat el client (firmware o browser)
+  let body = null;
+  let bodyContentType = null;
+  if (method === 'PUT' || method === 'POST') {
+    // Express ja ha parsejat el JSON via express.json(); el reconstruïm a Buffer
+    if (req.body && Object.keys(req.body).length > 0) {
+      body = Buffer.from(JSON.stringify(req.body));
+      bodyContentType = 'application/json';
+    }
   }
 
   try {
-    const buf = await fetchUrl(rawUrl);
-    // Endevina el Content-Type pel nom de fitxer
-    const ct = rawUrl.toLowerCase().split('?')[0].endsWith('.bin')
-      ? 'application/octet-stream'
-      : 'application/zip';
-    res.set('Content-Type', ct);
+    const { statusCode, contentType, buf } = await proxyRequest(
+      rawUrl, method, body, bodyContentType
+    );
+    console.log(`[Proxy] ${method} ${rawUrl} → ${statusCode}, ${buf.length} bytes, ${contentType}`);
+    res.status(statusCode);
+    res.set('Content-Type', contentType);
     res.set('Content-Length', buf.length);
     res.send(buf);
   } catch (err) {
-    console.error(`[Proxy] Error en fetch de ${rawUrl}: ${err.message}`);
+    console.error(`[Proxy] Error ${method} ${rawUrl}: ${err.message}`);
     res.status(502).json({ error: `Error al proxy: ${err.message}` });
   }
-});
+}
 
-// ─── Estat compartit (clau/valor, persistent en memòria) ───────────────────────
-// GET  /state        → retorna { message, updatedAt }
-// PUT  /state        → body JSON { message: "text" } → actualitza i retorna igual
+app.get('/proxy',  handleProxy);
+app.put('/proxy',  handleProxy);
+app.post('/proxy', handleProxy);
+
+
+// ─── Estat compartit (clau/valor, persistent en memòria) ─────────────────────
+// GET  /state  → retorna { message, updatedAt }
+// PUT  /state  → body JSON { message: "text" } → actualitza i retorna
 //
 // Ús des de terminal:
 //   curl https://iot02sim.binefa.cat/state
@@ -792,8 +850,8 @@ app.get('/proxy', async (req, res) => {
 //        -d '{"message":"IO0 pressed"}' \
 //        https://iot02sim.binefa.cat/state
 //
-// Ús des de sketch (via proxy QEMU):
-//   PUT http://192.168.4.1:3000/state   body JSON { "message": "IO0 pressed" }
+// Ús des de sketch QEMU (directe, sense proxy):
+//   GET/PUT http://192.168.4.1:3000/state
 
 let g_state = { message: '', updatedAt: 0 };
 
@@ -803,7 +861,7 @@ app.get('/state', (req, res) => {
 
 app.put('/state', (req, res) => {
   const szMsg = (req.body && typeof req.body.message === 'string')
-    ? req.body.message.substring(0, 256) // màxim 256 caràcters
+    ? req.body.message.substring(0, 256)
     : '';
   if (szMsg === '') {
     return res.status(400).json({ error: 'Camp "message" obligatori i no buit' });
