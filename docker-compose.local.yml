@@ -28,6 +28,8 @@ services:
       - MQTT_BROKER_PORT=1883
     ports:
       - "5555:3000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     deploy:
       resources:
         limits:
