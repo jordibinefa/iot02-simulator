@@ -110,6 +110,7 @@ class QemuSession {
 
     const monitorPort = await findFreePort(10000, 20000);
     this.monitorPort = monitorPort;
+    this.monitorPort2 = monitorPort + 1;
 
     const serialPort = await findFreePort(20000, 30000);
     this.serialPort = serialPort;
@@ -125,6 +126,7 @@ class QemuSession {
       '-drive', 'file=' + sessionFlash + ',if=mtd,format=raw',
       '-serial', 'tcp:127.0.0.1:' + serialPort + ',server,nowait',
       '-monitor', 'tcp:127.0.0.1:' + monitorPort + ',server,nowait',
+      '-monitor', 'telnet:127.0.0.1:' + this.monitorPort2 + ',server,nowait',
       '-nic', 'user,model=open_eth,net=192.168.4.0/24,host=192.168.4.1,dns=8.8.8.8,hostfwd=tcp::0-:80,mac=' + baseMac,
       '-drive', 'if=none,id=efuse,file=' + efusePath + ',format=raw',
       '-global', 'nvram.esp32.efuse.drive=efuse',
