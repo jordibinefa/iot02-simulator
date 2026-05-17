@@ -42,7 +42,7 @@ services:
       - ./backend/MqttBridge.js:/app/MqttBridge.js
       - ./backend/package.json:/app/package.json
       - ./frontend/index.html:/app/frontend/index.html
-      - ./frontend/test.html:/app/frontend/test.html      
+      - ./frontend/testData.html:/app/frontend/testData.html      
       - ./frontend/css:/app/frontend/css
       - ./frontend/js:/app/frontend/js
       - ./frontend/imatges:/app/frontend/imatges
