@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IoT-02 Data monitor</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Courier New', monospace;
+      background: #0d1117;
+      color: #c9d1d9;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      gap: 2rem;
+      padding: 2rem;
+    }
+
+    h1 {
+      font-size: 1.1rem;
+      color: #8b949e;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    /* ── Taula de valors ── */
+    #data-box {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 1.5rem 2rem;
+      min-width: 320px;
+      max-width: 600px;
+      width: 100%;
+    }
+
+    #data-meta {
+      display: flex;
+      align-items: baseline;
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+
+    #data-time {
+      font-size: 0.75rem;
+      color: #484f58;
+      flex: 1;
+    }
+
+    #data-method {
+      font-size: 0.7rem;
+      font-weight: bold;
+      letter-spacing: 0.06em;
+      padding: 0.15rem 0.5rem;
+      border-radius: 4px;
+      background: #21262d;
+      color: #484f58;
+      border: 1px solid #30363d;
+      transition: background 0.3s, color 0.3s;
+    }
+
+    #data-method.post { background: #0d2a1a; color: #3fb950; border-color: #2ea043; }
+    #data-method.put  { background: #1a1a0d; color: #d29922; border-color: #9e6a03; }
+
+    #data-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    #data-table td {
+      padding: 0.35rem 0.5rem;
+      border-bottom: 1px solid #21262d;
+      font-size: 0.95rem;
+    }
+
+    #data-table td:first-child { color: #8b949e; width: 45%; }
+    #data-table td:last-child  { color: #58a6ff; text-align: right; transition: color 0.3s; }
+    #data-table td.flash       { color: #3fb950; }
+
+    #data-empty {
+      color: #484f58;
+      font-size: 0.85rem;
+      text-align: center;
+      padding: 1rem 0;
+    }
+
+    /* ── Indicador de connexió ── */
+    #status {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.8rem;
+      color: #8b949e;
+    }
+
+    #dot { width: 8px; height: 8px; border-radius: 50%; background: #3fb950; transition: background 0.3s; }
+    #dot.error   { background: #f85149; }
+    #dot.waiting { background: #d29922; }
+
+    /* ── Formulari manual ── */
+    #form-box {
+      display: flex;
+      gap: 0.5rem;
+      width: 100%;
+      max-width: 600px;
+      flex-wrap: wrap;
+    }
+
+    #input-msg {
+      flex: 1;
+      min-width: 180px;
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      color: #c9d1d9;
+      font-family: inherit;
+      font-size: 0.85rem;
+      padding: 0.5rem 0.75rem;
+      outline: none;
+    }
+
+    #input-msg:focus       { border-color: #58a6ff; }
+    #input-msg::placeholder { color: #484f58; }
+
+    button {
+      background: #21262d;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      color: #c9d1d9;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 0.9rem;
+      padding: 0.5rem 1rem;
+      transition: background 0.2s, border-color 0.2s;
+      white-space: nowrap;
+    }
+
+    button:hover  { background: #30363d; border-color: #8b949e; }
+    button:active { background: #388bfd22; border-color: #58a6ff; }
+
+    /* ── Historial ── */
+    #log-box { width: 100%; max-width: 600px; }
+
+    #log-title {
+      font-size: 0.75rem;
+      color: #484f58;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 0.5rem;
+    }
+
+    #log {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 0.75rem;
+      font-size: 0.78rem;
+      color: #8b949e;
+      max-height: 180px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column-reverse;
+      gap: 0.2rem;
+    }
+
+    .log-entry      { border-bottom: 1px solid #21262d; padding-bottom: 0.2rem; }
+    .log-entry:last-child { border-bottom: none; }
+
+    .log-method {
+      display: inline-block;
+      font-size: 0.65rem;
+      font-weight: bold;
+      padding: 0 0.3rem;
+      border-radius: 3px;
+      margin-right: 0.4rem;
+    }
+    .log-method.post { background: #0d2a1a; color: #3fb950; }
+    .log-method.put  { background: #1a1a0d; color: #d29922; }
+
+    /* ── curl hint ── */
+    #curl-hint {
+      font-size: 0.72rem;
+      color: #484f58;
+      background: #161b22;
+      border: 1px solid #21262d;
+      border-radius: 6px;
+      padding: 0.6rem 1rem;
+      width: 100%;
+      max-width: 600px;
+      word-break: break-all;
+      line-height: 1.8;
+    }
+
+    #curl-hint span { color: #8b949e; }
+  </style>
+</head>
+<body>
+
+  <h1>IoT-02 · Data monitor</h1>
+
+  <div id="data-box">
+    <div id="data-meta">
+      <div id="data-time">esperant primer paquet...</div>
+      <div id="data-method">—</div>
+    </div>
+    <div id="data-empty">— sense dades —</div>
+    <table id="data-table" style="display:none"></table>
+  </div>
+
+  <div id="status">
+    <div id="dot" class="waiting"></div>
+    <span id="status-text">connectant...</span>
+  </div>
+
+  <div id="form-box">
+    <input id="input-msg" type="text"
+           placeholder='JSON manual, p.ex. {"T":22.3,"RH":55}'
+           maxlength="512">
+    <button onclick="sendData('PUT')">Tramet PUT</button>
+    <button onclick="sendData('POST')">Tramet POST</button>
+  </div>
+
+  <div id="log-box">
+    <div id="log-title">Historial</div>
+    <div id="log"></div>
+  </div>
+
+  <div id="curl-hint">
+    <span>curl POST:</span>
+    curl -X POST -H "Content-Type: application/json"
+    -d '{"LDR":1024,"CO2_ppm":500,"T":22.3,"P":1013.1,"RH":55.2}'
+    <span id="base-url-hint"></span>/data<br>
+    <span>curl PUT:</span>&nbsp;
+    curl -X PUT &nbsp;-H "Content-Type: application/json"
+    -d '{"LDR":1024,"CO2_ppm":500,"T":22.3,"P":1013.1,"RH":55.2}'
+    <span id="base-url-hint2"></span>/data
+  </div>
+
+  <script>
+    const BASE = window.location.origin;
+    document.getElementById('base-url-hint').textContent  = BASE;
+    document.getElementById('base-url-hint2').textContent = BASE;
+
+    let lastUpdatedAt = 0;
+
+    // ── Polling cada 1 s ──────────────────────────────────────────────────────
+    async function poll() {
+      try {
+        const r = await fetch(BASE + '/data');
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const data = await r.json();
+        setStatus(true);
+        if (data.updatedAt !== lastUpdatedAt) {
+          lastUpdatedAt = data.updatedAt;
+          showData(data.payload, data.updatedAt, data.method || '—');
+        }
+      } catch (e) {
+        setStatus(false, e.message);
+      }
+    }
+
+    // ── Renderitzar taula clau-valor ──────────────────────────────────────────
+    function showData(payload, ts, method) {
+      const empty = document.getElementById('data-empty');
+      const table = document.getElementById('data-table');
+      const badge = document.getElementById('data-method');
+
+      badge.textContent = method;
+      badge.className   = method.toLowerCase();
+
+      if (!payload || typeof payload !== 'object') {
+        empty.style.display = '';
+        table.style.display = 'none';
+        return;
+      }
+
+      empty.style.display = 'none';
+      table.style.display = '';
+      table.innerHTML = '';
+
+      for (const [key, val] of Object.entries(payload)) {
+        const tr    = document.createElement('tr');
+        const tdKey = document.createElement('td');
+        const tdVal = document.createElement('td');
+        tdKey.textContent = key;
+        tdVal.textContent = (typeof val === 'number') ? formatNum(val) : val;
+        tdVal.classList.add('flash');
+        setTimeout(() => tdVal.classList.remove('flash'), 600);
+        tr.appendChild(tdKey);
+        tr.appendChild(tdVal);
+        table.appendChild(tr);
+      }
+
+      const d = new Date(ts);
+      document.getElementById('data-time').textContent =
+        d.toLocaleTimeString('ca-ES', { hour12: false }) + '.' +
+        String(d.getMilliseconds()).padStart(3, '0');
+
+      addLog(payload, ts, method);
+    }
+
+    // ── Afegir entrada a l'historial ─────────────────────────────────────────
+    function addLog(payload, ts, method) {
+      const d = new Date(ts);
+      const resum = Object.entries(payload)
+        .map(([k, v]) => `${k}:${typeof v === 'number' ? formatNum(v) : v}`)
+        .join('  ');
+
+      const entry = document.createElement('div');
+      entry.className = 'log-entry';
+
+      const badge = document.createElement('span');
+      badge.className   = 'log-method ' + method.toLowerCase();
+      badge.textContent = method;
+
+      entry.appendChild(badge);
+      entry.appendChild(document.createTextNode(
+        d.toLocaleTimeString('ca-ES', { hour12: false }) + '  ' + resum
+      ));
+      document.getElementById('log').prepend(entry);
+
+      const log = document.getElementById('log');
+      while (log.children.length > 50) log.removeChild(log.lastChild);
+    }
+
+    // ── Enviar dades manual (PUT o POST) ──────────────────────────────────────
+    async function sendData(method) {
+      const inp = document.getElementById('input-msg');
+      const raw = inp.value.trim();
+      if (!raw) return;
+
+      let body;
+      try {
+        body = JSON.parse(raw);
+        if (typeof body !== 'object' || Array.isArray(body)) throw new Error();
+      } catch {
+        alert('El text ha de ser un objecte JSON vàlid, p.ex. {"T":22.3,"RH":55}');
+        return;
+      }
+
+      try {
+        const r = await fetch(BASE + '/data', {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        inp.value = '';
+        await poll();
+      } catch (e) {
+        setStatus(false, e.message);
+      }
+    }
+
+    // Enter envia POST per defecte
+    document.getElementById('input-msg')
+      .addEventListener('keydown', e => { if (e.key === 'Enter') sendData('POST'); });
+
+    // ── Format numèric ────────────────────────────────────────────────────────
+    function formatNum(n) {
+      return Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/\.?0+$/, '');
+    }
+
+    // ── Indicador de connexió ─────────────────────────────────────────────────
+    function setStatus(ok, detail) {
+      const dot  = document.getElementById('dot');
+      const span = document.getElementById('status-text');
+      if (ok) {
+        dot.className = '';
+        span.textContent = 'connectat · polling 1 s';
+      } else {
+        dot.className = 'error';
+        span.textContent = 'error: ' + (detail || '?');
+      }
+    }
+
+    // ── Inici ─────────────────────────────────────────────────────────────────
+    poll();
+    setInterval(poll, 1000);
+  </script>
+
+</body>
+</html>
