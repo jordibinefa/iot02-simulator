@@ -859,7 +859,8 @@ app.get('/state', (req, res) => {
   res.json(g_state);
 });
 
-app.put('/state', (req, res) => {
+// Handler compartit per a PUT i POST /state
+function handleStateWrite(req, res) {
   const szMsg = (req.body && typeof req.body.message === 'string')
     ? req.body.message.substring(0, 256)
     : '';
@@ -867,9 +868,45 @@ app.put('/state', (req, res) => {
     return res.status(400).json({ error: 'Camp "message" obligatori i no buit' });
   }
   g_state = { message: szMsg, updatedAt: Date.now() };
-  console.log(`[State] "${szMsg}"`);
+  console.log(`[State] ${req.method} "${szMsg}"`);
   res.json(g_state);
+}
+
+app.put('/state',  handleStateWrite);
+app.post('/state', handleStateWrite);
+
+
+// ─── Dades ambientals genèriques (JSON lliure, persistent en memòria) ─────────
+// GET  /data  → retorna { payload, updatedAt }
+// POST /data  → body JSON lliure → emmagatzema i retorna
+//
+// Ús des de terminal:
+//   curl https://iot02sim.binefa.cat/data
+//   curl -X POST -H "Content-Type: application/json" \
+//        -d '{"LDR":1024,"CO2_ppm":500,"T":22.3,"P":1013.1,"RH":55.2}' \
+//        https://iot02sim.binefa.cat/data
+//
+// Ús des de sketch QEMU (via proxy):
+//   POST 192.168.4.1:3000/proxy?url=https://iot02sim.binefa.cat/data
+
+let g_data = { payload: null, method: null, updatedAt: 0 };
+
+app.get('/data', (req, res) => {
+  res.json(g_data);
 });
+
+function handleDataWrite(req, res) {
+  if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
+    return res.status(400).json({ error: 'Body ha de ser un objecte JSON' });
+  }
+  g_data = { payload: req.body, method: req.method, updatedAt: Date.now() };
+  console.log(`[Data] ${req.method} ${JSON.stringify(req.body)}`);
+  res.json(g_data);
+}
+
+app.post('/data', handleDataWrite);
+app.put('/data',  handleDataWrite);
+
 
 // ─── WebSocket handling ───
 server.on('upgrade', (request, socket, head) => {
